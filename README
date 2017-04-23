@@ -69,7 +69,10 @@ compression functionality. This limits the code of CL-TLS to simply opening
 and managing a TLS tunnel through an octet stream and enhances portability
 and extensibility. However, libraries that offer this functionality
 (such as threaded or evented servers), can be built trivially
-on top of CL-TLS. Here is an example of a simple text echo server that
+on top of CL-TLS.
+See https://github.com/shrdlu68/secure-sockets as an example.
+
+Here is an example of a simple text echo server that
 implements a simple one-thread-per-request model using usocket
 and bordeaux-threads:
 
