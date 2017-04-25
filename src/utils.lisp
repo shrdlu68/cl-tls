@@ -166,3 +166,13 @@
 			      (subseq dns-name (position #\. dns-name)))))
 	(t
 	 (equalp pattern dns-name))))
+
+(defun split-string (str target)
+  (loop with len = (length str)
+	for start = 0 then (search str target :start2 (1+ start) :test #'char=)
+	while (and start
+		   (< (+ start len) (length target)))
+	collecting (subseq target (if (zerop start)
+				      0
+				      (+ start len))
+			   (search str target :start2 (1+ start) :test #'char=))))
