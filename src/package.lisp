@@ -21,4 +21,7 @@
 	  rsassa-pkcs1.5-verify
 
 	  ;; PKCS5
-	  pbes2-decrypt))
+	  pbes2-decrypt
+
+	  ;; Transport
+	  address host port request-stream-to-address))
