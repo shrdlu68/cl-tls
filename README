@@ -48,9 +48,9 @@ So far:
     fragmentation and session renegotiation.
 
 Major TODOs before alpha release:
-  -Finalizing work on extensions.
-  -OSCP support (a critical component of PKIX).
-  -Speed/Memory optimizations
+  -Finalizing work on hello extensions.
+  -Fuzzing.
+  -Speed/Memory optimizations.
 
 Features that would be nice, but are not essential
   -Support for initializing with multiple certificates
