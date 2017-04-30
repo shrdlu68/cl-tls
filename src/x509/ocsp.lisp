@@ -8,6 +8,13 @@
 
 (defparameter *id-ad-ocsp* '(1 3 6 1 5 5 7 48 1))
 
+(defmacro ocsp-catch-asn-error (&body body)
+  `(handler-case
+       ,@body
+     (asn.1-decoding-error (err)
+       (error 'ocsp-error
+	      :log (format nil "Encountered an ASN decoding error: ~A" (text err))))))
+
 ;; CertID          ::=     SEQUENCE {
 ;; 	hashAlgorithm       AlgorithmIdentifier,
 ;; 	issuerNameHash      OCTET STRING, -- Hash of issuer's DN
@@ -81,7 +88,8 @@
 	   (unless (= (aref signature 0) 1)
 	     (return-from verify-ocsp-signature nil))
 	   (setf signature (subseq signature (1+ (position 0 signature))))
-	   (multiple-value-bind (asn-type digest-info) (parse-der signature)
+	   (multiple-value-bind (asn-type digest-info) (ocsp-catch-asn-error
+							(parse-der signature))
 	     (unless (and (eql asn-type :sequence)
 			  (= (length digest-info) 2))
 	       (return-from verify-ocsp-signature nil))
@@ -99,7 +107,8 @@
 		  :q (gethash :dsa-q signing-certificate)
 		  :g (gethash :dsa-g signing-certificate)
 		  :y (gethash :dsa-public-key signing-certificate))))
-	   (multiple-value-bind (asn-type dss-sig-value) (parse-der signature)
+	   (multiple-value-bind (asn-type dss-sig-value) (ocsp-catch-asn-error
+							  (parse-der signature))
 	     (unless (and (eql asn-type :sequence)
 			  (= (length dss-sig-value) 2))
 	       (return-from verify-ocsp-signature nil))
@@ -112,7 +121,7 @@
 (defun parse-response-data (data serial)
   (flet ((fail ()
 	   (error 'ocsp-error :log "Invalid responseData")))
-    (setf data (asn-sequence-to-list data))
+    (setf data (ocsp-catch-asn-error (asn-sequence-to-list data)))
     (unless (<= 3 (length data) 5) (fail))
     (macrolet ((bind-responses (ll &body body)
 		 `(cond ((= 3 (length ,ll))
@@ -191,7 +200,8 @@
 	  ;; Verify that next-update is greater than the current time.
 	  (when next-update
 	    (unless (eql (first next-update) 0) (fail))
-	    (setf next-update (multiple-value-list (parse-der (second next-update))))
+	    (setf next-update (multiple-value-list (ocsp-catch-asn-error
+						    (parse-der (second next-update)))))
 	    (unless (asn-type-matches-p :generalized-time next-update)
 	      (fail))
 	    (setf next-update (asn-time-to-universal-time (second next-update)))
@@ -226,7 +236,8 @@
 	       (error 'ocsp-error :log (format nil "A HTTP error occured while sending an OCSP request. Details: ~A" (log-info err)))))))
     ;; (format t "~&Checking OCSP from url [~S]~%" url)
     (flet ((fail () (error 'ocsp-error :log "Malformed response")))
-      (setf ocsp-response (multiple-value-list (parse-der ocsp-response)))
+      (setf ocsp-response (multiple-value-list (ocsp-catch-asn-error
+						(parse-der ocsp-response))))
       (unless (asn-type-matches-p :sequence ocsp-response)
 	(fail))
       (setf ocsp-response (second ocsp-response))
@@ -239,7 +250,7 @@
 	  (unless (= 0 (first response-bytes))
 	    (fail))
 	  (setf response-bytes (multiple-value-list
-				(parse-der (second response-bytes))))
+				(ocsp-catch-asn-error (parse-der (second response-bytes)))))
 	  (unless (asn-type-matches-p :sequence response-bytes)
 	    (fail))
 	  (setf response-bytes (second response-bytes)))
@@ -258,16 +269,17 @@
 	       (error 'ocsp-error :log "Unknown OCSP response type"))
 	     (setf response
 		   (multiple-value-list
-		    (parse-der (second response) :mode :serialized)))
+		    (ocsp-catch-asn-error (parse-der (second response) :mode :serialized))))
 	     (unless (asn-type-matches-p :sequence response)
 	       (fail))
-	     (setf response (asn-sequence-to-list (second response)
-						  :mode :serialized))
+	     (setf response (ocsp-catch-asn-error (asn-sequence-to-list (second response)
+						  :mode :serialized)))
 	     (unless (<= 3 (length response) 4) (fail))
 	     (destructuring-bind (response-data signature-algorithm
 				  signature &optional certs) response
 	       (setf signature-algorithm
-		     (asn-sequence-to-list (second signature-algorithm)))
+		     (ocsp-catch-asn-error
+		      (asn-sequence-to-list (second signature-algorithm))))
 	       (unless (and (asn-type-matches-p :sequence response-data)
 			    (asn-type-matches-p :bit-string signature))
 		 (fail))
@@ -278,8 +290,9 @@
 		      ;; The certificate that signed the response
 		      ;; is in certs
 		      (unless (= (first certs) 0) (fail))
-		      (setf certs (asn-sequence-to-list (second certs)
-							:mode :serialized))
+		      (setf certs (ocsp-catch-asn-error
+				   (asn-sequence-to-list (second certs)
+							 :mode :serialized)))
 		      (let* ((signer (x509-decode (second (first certs))))
 			     (extended-ku (gethash :extended-key-usage signer)))
 			;; Ensure the OCSP-sign key-usage bit is set
