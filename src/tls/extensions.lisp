@@ -85,7 +85,7 @@
   )
 
 (defmethod parse-extension (session extension-data (type (eql :status-request)))
-  ;; TODO
+  
   )
 
 (defun pack-extension (extension-type extension-data)
@@ -101,6 +101,10 @@
     (replace ext (integer-to-octets ext-len 2) :start1 2)
     (replace ext extension-data :start1 4)
     ext))
+
+(defun create-cert-status-request ()
+  ;; TODO
+)
 
 (defun create-sni (fqdn)
   (let* ((fqdn-octets (babel:string-to-octets fqdn :encoding :ascii))

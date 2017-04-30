@@ -1,6 +1,5 @@
 ;; x509 parsing
 ;; Spec: https://tools.ietf.org/html/rfc5280
-;; https://www.cs.auckland.ac.nz/~pgut001/pubs/x509guide.txt is a helpful implementation guide
 (in-package :cl-tls)
 
 (defconstant +md2WithRSAEncryption+ #X02)
@@ -12,7 +11,6 @@
 (defconstant +sha512WithRSAEncryption+ #X0d)
 
 ;; https://tools.ietf.org/html/rfc5280
-;; https://www.cs.auckland.ac.nz/~pgut001/pubs/x509guide.txt
 ;; Certificate ::= SEQUENCE {
 ;; 	tbsCertificate          TBSCertificate,
 ;; 	signatureAlgorithm      AlgorithmIdentifier,
@@ -39,8 +37,8 @@
   "Parse DER-encoded distinguishedName sequence"
   (let (dn)
     (loop
-       for rdn in rdns
-       do
+      for rdn in rdns
+      do
 	 (multiple-value-bind (element-type ava) (parse-der (second rdn))
 	   (flet ((fail ()
 		    (error 'x509-decoding-error
@@ -113,7 +111,8 @@
        (let ((dh-params (second (second public-key-algorithm))))
 	 (unless (and (< 1 (length dh-params) 4)
 		      (every #'(lambda (li) (eql (first li) :integer)) dh-params))
-	   (error 'x509-decoding-error :text "Invalid DHParameter field in SubjectPublicKeyInfo"))
+	   (error 'x509-decoding-error
+		  :text "Invalid DHParameter field in SubjectPublicKeyInfo"))
 	 (setf (gethash :dh-P ht) (second (first dh-params)))
 	 (setf (gethash :dh-G ht) (second (second dh-params)))
 	 (when (= (length dh-params) 3)
@@ -128,7 +127,8 @@
        ;;      }
        (unless (or (eql (first (second public-key-algorithm)) :null)
 		   (eql (first (second public-key-algorithm)) :oid))
-	 (error 'x509-decoding-error :text "ECParameters for id-ecPublicKey should be either NULL or OID"))
+	 (error 'x509-decoding-error
+		:text "ECParameters for id-ecPublicKey should be either NULL or OID"))
        (let ((named-curve (second (second public-key-algorithm))))
 	 (setf (gethash :named-curve ht)
 	       (cond
@@ -164,8 +164,8 @@
 	 (error 'x509-decoding-error :text "The subjectPublicKeyInfo bit string should contain an ASN.1 sequence"))
        (setf rsa-public-key (second rsa-public-key))
        (loop for element in rsa-public-key do
-	    (unless (eql (first element) :integer)
-	      (error 'x509-decoding-error :text "Expected integers in PKI field.")))
+	 (unless (eql (first element) :integer)
+	   (error 'x509-decoding-error :text "Expected integers in PKI field.")))
        (setf (gethash :modulus ht) (second (first rsa-public-key)))
        (setf (gethash :public-exponent ht) (second (second rsa-public-key)))))
     ;; DSA
@@ -259,72 +259,76 @@
 		 extensions)
     (error 'x509-decoding-error :text "Error parsing extensions"))
   (setf extensions (loop
-		      for ext in extensions collecting
-			(if (= (length ext) 2)
-			    (destructuring-bind (extension-id extension-value) ext
-			      (list (second extension-id)
-				    nil
-				    (second extension-value)))
-			    (destructuring-bind (extension-id critical-p extension-value) ext
-			      (list (second extension-id)
-				    (second critical-p)
-				    (second extension-value))))))
+		     for ext in extensions collecting
+					   (if (= (length ext) 2)
+					       (destructuring-bind (extension-id extension-value) ext
+						 (list (second extension-id)
+						       nil
+						       (second extension-value)))
+					       (destructuring-bind (extension-id critical-p extension-value) ext
+						 (list (second extension-id)
+						       (second critical-p)
+						       (second extension-value))))))
   (loop
-     for ext in extensions do
-       (destructuring-bind (extension-id critical-p extension-value) ext
-	 (cond
-	   ((equal extension-id '(2 5 29 35))
-	    (process-extension x509 critical-p extension-value :authority-key-identifier))
-	   ((equal extension-id '(2 5 29 14))
-	    (process-extension x509 critical-p extension-value :subject-key-identifier))
-	   ((equal extension-id '(2 5 29 15))
-	    (process-extension x509 critical-p extension-value :key-usage))
-	   ((equal extension-id '(2 5 29 32))
-	    (process-extension x509 critical-p extension-value :certificate-policies))
-	   ((equal extension-id '(2 5 29 33))
-	    (process-extension x509 critical-p extension-value :policy-mappings))
-	   ((equal extension-id '(2 5 29 17))
-	    (process-extension x509 critical-p extension-value :subject-alternative-name))
-	   ((equal extension-id '(2 5 29 18))
-	    (process-extension x509 critical-p extension-value :issuer-alternative-name))
-	   ((equal extension-id '(2 5 29 19))
-	    (process-extension x509 critical-p extension-value :basic-constraints))
-	   ((equal extension-id '(2 5 29 30))
-	    (process-extension x509 critical-p extension-value :name-constraints))
-	   ((equal extension-id '(2 5 29 36))
-	    (process-extension x509 critical-p extension-value :policy-constraints))
-	   ((equal extension-id '(2 5 29 37))
-	    (process-extension x509 critical-p extension-value :extended-key-usage))
-	   ((equal extension-id '(2 5 29 31))
-	    (process-extension x509 critical-p extension-value :crl-distribution-points))
-	   ((equal extension-id '(2 5 29 54))
-	    (process-extension x509 critical-p extension-value :inhibit-anypolicy))
-	   ((equal extension-id '(2 5 29 46))
-	    (process-extension x509 critical-p extension-value :freshest-crl))
-	   ((equal extension-id '(1 3 6 1 5 5 7 1 1))
-	    (process-extension x509 critical-p extension-value :authority-information-access))
-	   ((equal extension-id '(1 3 6 1 5 5 7 1 11))
-	    (process-extension x509 critical-p extension-value :subject-information-access))
-	   (t
-	    (when critical-p ;the extension is unknown and critical
-	      (error 'x509-decoding-error
-		     :text "Encountered unknown critical extension")))))))
+    for ext in extensions do
+      (destructuring-bind (extension-id critical-p extension-value) ext
+	(cond
+	  ((equal extension-id '(2 5 29 35))
+	   (process-extension x509 critical-p extension-value :authority-key-identifier))
+	  ((equal extension-id '(2 5 29 14))
+	   (process-extension x509 critical-p extension-value :subject-key-identifier))
+	  ((equal extension-id '(2 5 29 15))
+	   (process-extension x509 critical-p extension-value :key-usage))
+	  ((equal extension-id '(2 5 29 32))
+	   (process-extension x509 critical-p extension-value :certificate-policies))
+	  ((equal extension-id '(2 5 29 33))
+	   (process-extension x509 critical-p extension-value :policy-mappings))
+	  ((equal extension-id '(2 5 29 17))
+	   (process-extension x509 critical-p extension-value :subject-alternative-name))
+	  ((equal extension-id '(2 5 29 18))
+	   (process-extension x509 critical-p extension-value :issuer-alternative-name))
+	  ((equal extension-id '(2 5 29 19))
+	   (process-extension x509 critical-p extension-value :basic-constraints))
+	  ((equal extension-id '(2 5 29 30))
+	   (process-extension x509 critical-p extension-value :name-constraints))
+	  ((equal extension-id '(2 5 29 36))
+	   (process-extension x509 critical-p extension-value :policy-constraints))
+	  ((equal extension-id '(2 5 29 37))
+	   (process-extension x509 critical-p extension-value :extended-key-usage))
+	  ((equal extension-id '(2 5 29 31))
+	   (process-extension x509 critical-p extension-value :crl-distribution-points))
+	  ((equal extension-id '(2 5 29 54))
+	   (process-extension x509 critical-p extension-value :inhibit-anypolicy))
+	  ((equal extension-id '(2 5 29 46))
+	   (process-extension x509 critical-p extension-value :freshest-crl))
+	  ((equal extension-id '(1 3 6 1 5 5 7 1 1))
+	   (process-extension x509 critical-p extension-value :authority-information-access))
+	  ((equal extension-id '(1 3 6 1 5 5 7 1 11))
+	   (process-extension x509 critical-p extension-value :subject-information-access))
+	  (t
+	   (when critical-p ;the extension is unknown and critical
+	     (error 'x509-decoding-error
+		    :text "Encountered unknown critical extension")))))))
 
 (defun x509-decode (octet-vector)
   "Deserialize an x509 certificate from an octet-vector"
   (let* ((x509 (make-hash-table))
 	 (certificate
-	  (multiple-value-bind (element-type contents) (parse-der octet-vector :mode :serialized)
-	    (unless (eql element-type :sequence)
-	      (error 'x509-decoding-error :text "Expected ASN.1 sequence. Element: certificate"))
-	    (asn-sequence-to-list contents :mode :serialized))))
+	   (multiple-value-bind (element-type contents)
+	       (parse-der octet-vector :mode :serialized)
+	     (unless (eql element-type :sequence)
+	       (error 'x509-decoding-error
+		      :text "Expected ASN.1 sequence. Element: certificate"))
+	     (asn-sequence-to-list contents :mode :serialized))))
     (unless (= (length certificate) 3)
       (error 'x509-decoding-error "Invalid certificate"))
     (destructuring-bind (tbs-certificate signature-algorithm signature) certificate
       (unless (eql (first tbs-certificate) :sequence)
-	(error 'x509-decoding-error :text "Expected ASN.1 sequence. Element: tbs-certificate"))
+	(error 'x509-decoding-error
+	       :text "Expected ASN.1 sequence. Element: tbs-certificate"))
       (unless (eql (first signature-algorithm) :sequence)
-	(error 'x509-decoding-error :text "Expected ASN.1 sequence. Element: signature-algorithm"))
+	(error 'x509-decoding-error
+	       :text "Expected ASN.1 sequence. Element: signature-algorithm"))
       (unless (eql (first signature) :bit-string)
 	(error 'x509-decoding-error :text "Expected ASN.1 bit string. Element: signature"))
       (setf (gethash :signature x509) (second signature))
@@ -343,7 +347,8 @@
 	(setf (aref tbs 0) #x30)
 	(cond ((> tbs-length 127)
 	       (setf (aref tbs 1) (logior length-octets-length 128))
-	       (setf (subseq tbs 2 (+ 2 length-octets-length)) (integer-to-octets tbs-length))
+	       (setf (subseq tbs 2 (+ 2 length-octets-length))
+		     (integer-to-octets tbs-length))
 	       (setf (subseq tbs (+ 2 length-octets-length)) (second tbs-certificate)))
 	      (t
 	       (setf (aref tbs 1) tbs-length)
@@ -357,17 +362,20 @@
       (unless (eql (first (first tbs-certificate)) 0)
 	(push nil tbs-certificate))
       (unless (<= 6 (length tbs-certificate) 8)
-	(error 'x509-decoding-error :text "There must be 6|7|8 elements in tbs-certificate"))
+	(error 'x509-decoding-error
+	       :text "There must be 6|7|8 elements in tbs-certificate"))
       (destructuring-bind (version serial certificate-signature-algorithm issuer validity subject
-				   subject-public-key-info &optional extensions)
+			   subject-public-key-info &optional extensions)
 	  tbs-certificate
 	;; Version
 	(cond (version
 	       (unless (eql (first version) 0)
-		 (error 'x509-decoding-error :text "Version field should be explicitly tagged with type=0"))
+		 (error 'x509-decoding-error
+			:text "Version field should be explicitly tagged with type=0"))
 	       (let ((v (multiple-value-list (parse-der (second version)))))
 		 (unless (eql (first v) :integer)
-		   (error 'x509-decoding-error :text "Version field should be an ASN.1 integer"))
+		   (error 'x509-decoding-error
+			  :text "Version field should be an ASN.1 integer"))
 		 (unless (<= 1 (second v) 2)
 		   (error 'x509-decoding-error :text "Version must be 2 or 3"))
 		 (setf (gethash :version x509) (1- (second v)))))
@@ -379,7 +387,8 @@
 	(setf (gethash :serial x509) (second serial))
 	;; Signature algorithm
 	(unless (eql (first certificate-signature-algorithm) :sequence)
-	  (error 'x509-decoding-error :text "Signature algorithm field should be an ASN.1 sequence"))
+	  (error 'x509-decoding-error
+		 :text "Signature algorithm field should be an ASN.1 sequence"))
 	(multiple-value-bind (signature-algorithm digest-algorithm)
 	    (parse-signature-algorithm (second certificate-signature-algorithm))
 	  (unless (and (eql (gethash :signature-algorithm x509) signature-algorithm)
@@ -387,7 +396,8 @@
 	    (error 'x509-decoding-error :text "SignatureAlgorithm mismatch between signature field in tbsCertificate and signatureAlgorithm field")))
 	;; Issuer field
 	(unless (eql (first issuer) :sequence)
-	  (error 'x509-decoding-error :text "Signature algorithm field should begin with an OID"))
+	  (error 'x509-decoding-error
+		 :text "Signature algorithm field should begin with an OID"))
 	(setf (gethash :issuer x509)
 	      (parse-directory-name (second issuer)))
 	;; Validity ::= SEQUENCE {notBefore time, notAfter time}
@@ -395,30 +405,33 @@
 	  (error 'x509-decoding-error :text "Validity field should be an ASN.1 sequence"))
 	(setf validity (second validity))
 	(loop for time in validity do
-	     (unless (or (and (eql (first time) :utc-time)
-			      (= (length (second time)) 13)
-			      (every #'digit-char-p (subseq (second time) 0 12)))
-			 (and (eql (first time) :generalized-time)
-			      (= (length (second time)) 15)
-			      (every #'digit-char-p (subseq (second time) 0 14))))
-	       (error 'x509-decoding-error :text "Invalid encoding-validity field")))
+	  (unless (or (and (eql (first time) :utc-time)
+			   (= (length (second time)) 13)
+			   (every #'digit-char-p (subseq (second time) 0 12)))
+		      (and (eql (first time) :generalized-time)
+			   (= (length (second time)) 15)
+			   (every #'digit-char-p (subseq (second time) 0 14))))
+	    (error 'x509-decoding-error :text "Invalid encoding-validity field")))
 	(let (dates)
 	  (setf (getf dates :not-before) (second (first validity)))
 	  (setf (getf dates :not-after) (second (second validity)))
 	  (setf (gethash :validity x509) dates))
 	;; Subject field
 	(unless (eql (first subject) :sequence)
-	  (error 'x509-decoding-error :text "Signature algorithm field should begin with an OID"))
+	  (error 'x509-decoding-error
+		 :text "Signature algorithm field should begin with an OID"))
 	(setf (gethash :subject x509)
 	      (parse-directory-name (second subject)))
 	;; SubjectPublicKeyInfo ::= SEQUENCE {algorithm AlgorithmIdentifier,subjectPublicKey BIT STRING }
 	(unless (eql (first subject-public-key-info) :sequence)
-	  (error 'x509-decoding-error :text "SubjectPublicKeyInfo field should be an ASN.1 sequence"))
+	  (error 'x509-decoding-error
+		 :text "SubjectPublicKeyInfo field should be an ASN.1 sequence"))
 	(setf subject-public-key-info (second subject-public-key-info))
 	(unless (and (= 2 (length subject-public-key-info))
 		     (eql (first (first subject-public-key-info)) :sequence)
 		     (eql (first (second subject-public-key-info)) :bit-string))
-	  (error 'x509-decoding-error :text "Length or type mismatch in SubjectPublicKeyInfo field"))
+	  (error 'x509-decoding-error
+		 :text "Length or type mismatch in SubjectPublicKeyInfo field"))
 	;; AlgorithmIdentifier
 	(parse-pka (second (first subject-public-key-info)) x509)
 	
@@ -426,60 +439,9 @@
 	(parse-pub-key (second (second subject-public-key-info)) x509)
 
 	;; Extensions  ::=  SEQUENCE SIZE (1..MAX) OF Extension
-
-	;; Extension  ::=  SEQUENCE  {
-	;; extnID      OBJECT IDENTIFIER,
-	;; critical    BOOLEAN DEFAULT FALSE,
-	;; extnValue   OCTET STRING
-	;; -- contains the DER encoding of an ASN.1 value
-	;; -- corresponding to the extension type identified
-	;; -- by extnID
-	;;      }
 	(when extensions
 	  (process-extensions x509 extensions)))
       x509)))
-
-;; signature AlgorithmIdentifier
-;; AlgorithmIdentifier ::= SEQUENCE {
-;; 	ALGORITHM.&id ({SupportedAlgorithms}),
-;; 	ALGORITHM.&Type ({SupportedAlgorithms}{ @algorithm}) OPTIONAL }
-;; ALGORITHM ::= TYPE-IDENTIFIER
-;; TYPE-IDENTIFIER ::= CLASS
-;; 	{
-;; 	&id OBJECT IDENTIFIER UNIQUE,
-;; 	&Type
-;; 	}
-;; 	      WITH SYNTAX {&Type IDENTIFIED BY &id}
-;; https://www.ietf.org/rfc/rfc3447.txt
-;; rsaEncryption    OBJECT IDENTIFIER ::= { pkcs-1 1 }
-;; Only support RSA for now-TODO
-;; The parameters field associated with this OID in a value of type AlgorithmIdentifier shall
-;; have a value of type NULL.
-;; Hash algorithm   OID
-;; --------------------------------------------------------
-;; MD2              md2WithRSAEncryption    ::= {pkcs-1 2}
-;; MD5              md5WithRSAEncryption    ::= {pkcs-1 4}
-;; SHA-1            sha1WithRSAEncryption   ::= {pkcs-1 5}
-;; SHA-256          sha256WithRSAEncryption ::= {pkcs-1 11}
-;; SHA-384          sha384WithRSAEncryption ::= {pkcs-1 12}
-;; SHA-512          sha512WithRSAEncryption ::= {pkcs-1 13}
-;; pkcs-1 OBJECT IDENTIFIER ::= {
-;;          iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1) 1 }
-
-;; Name ::= SEQUENCE OF RelativeDistinguishedName
-;; RelativeDistinguishedName ::= SET OF AttributeValueAssertion
-;; 	AttributeValueAssertion ::= SEQUENCE {
-;; 	attributeType           OBJECT IDENTIFIER,
-;; 	attributeValue          ANY
-;; 	}	
-;; countryName     ::= SEQUENCE { { 2 5 4 6 }, StringType( SIZE( 2 ) ) }
-;; organization    ::= SEQUENCE { { 2 5 4 10 }, StringType( SIZE( 1...64 ) ) }
-;; organizationalUnitName
-;; ::= SEQUENCE { { 2 5 4 11 }, StringType( SIZE( 1...64 ) ) }
-;; commonName      ::= SEQUENCE { { 2 5 4 3 }, StringType( SIZE( 1...64 ) ) }
-;; localityName    ::= SEQUENCE { { 2 5 4 7 }, StringType( SIZE( 1...64 ) ) }
-;; stateOrProvinceName
-;;                 ::= SEQUENCE { { 2 5 4 8 }, StringType( SIZE( 1...64 ) ) }
 
 (defun asn-time-to-universal-time (time-string)
   "Converts utcTime or GeneralTime to universal time"
@@ -506,7 +468,7 @@
     (case (gethash :signature-algorithm subject)
       (:rsa
        (let ((pub-key (ironclad:make-public-key :rsa :n (gethash :modulus issuer)
-						:e (gethash :public-exponent issuer))))
+						     :e (gethash :public-exponent issuer))))
 	 (setf signature (rsa-encrypt signature pub-key))
 	 (unless (= (aref signature 0) 1)
 	   (return-from verify-signature nil))
@@ -522,11 +484,11 @@
 	     (timing-independent-compare verification-digest digest)))))
       (:dsa
        (let ((pub-key
-	      (ironclad:make-public-key :dsa
-					:p (gethash :dsa-p issuer)
-					:q (gethash :dsa-q issuer)
-					:g (gethash :dsa-g issuer)
-					:y (gethash :dsa-public-key issuer))))
+	       (ironclad:make-public-key :dsa
+					 :p (gethash :dsa-p issuer)
+					 :q (gethash :dsa-q issuer)
+					 :g (gethash :dsa-g issuer)
+					 :y (gethash :dsa-public-key issuer))))
 	 (multiple-value-bind (asn-type dss-sig-value) (parse-der signature)
 	   (unless (and (eql asn-type :sequence)
 			(= (length dss-sig-value) 2))
@@ -536,53 +498,15 @@
 	     (setf signature (ironclad:make-dsa-signature (second r) (second s)))
 	     (ironclad:verify-signature pub-key verification-digest signature))))))))
 
-(defun validate (session chain)
-  "Certificate Path validation"
-  (loop
-     with last-index = (1- (length chain))
-     for index upfrom 0 below (length chain)
-     do
-     ;; Check validity
-       (let* ((validity (gethash :validity (aref chain index)))
-	      (not-before (asn-time-to-universal-time (getf validity :not-before)))
-	      (not-after (asn-time-to-universal-time (getf validity :not-after))))
-	 (unless (<= not-before
-		     (handler-case
-			 (get-universal-time)
-		       (error ()
-			 (error 'exception
-				:log "Could not determine system time (for certificate validation)"
-				:alert :internal-error)))
-		     not-after)
-	   (return-from validate nil)))
-       (cond ((= last-index index)
-	      (with-slots (ca-certificates) session
-		(let* ((subject (aref chain index))
-		       (issuers (loop
-				   for ca in ca-certificates
-				   when (equal (gethash :subject ca)
-					       (gethash :issuer subject))
-				   collect ca))
-		       (issuer
-			(loop
-			   with authority-key-identifier = (gethash
-							    :authority-key-identifier
-							    subject)
-			   for ca in issuers
-			   when (equalp
-				 (getf
-				  authority-key-identifier :key-identifier)
-				 (gethash :subject-key-identifier ca))
-			   return ca)))
-		  (unless (and issuer
-			       (verify-signature subject issuer))
-		    (return-from validate nil)))))
-	     (t
-	      (let ((subject (aref chain index))
-		    (issuer (aref chain (1+ index))))
-		(unless (equal (gethash :issuer subject)
-			       (gethash :subject issuer))
-		  (return-from validate nil))
-	        (unless (verify-signature subject issuer)
-		  (return-from validate nil))))))
-  t)
+(defun time-valid-p (cert)
+  (let* ((validity (gethash :validity cert))
+	 (not-before (asn-time-to-universal-time (getf validity :not-before)))
+	 (not-after (asn-time-to-universal-time (getf validity :not-after)))
+	 (current-time
+	   (handler-case
+	       (get-universal-time)
+	     (error ()
+	       (error 'exception
+		      :log "Could not determine system time for certificate validation"
+		      :alert :internal-error)))))
+    (<= not-before current-time not-after)))

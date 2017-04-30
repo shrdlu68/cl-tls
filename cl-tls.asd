@@ -26,12 +26,16 @@
 			 (:module "x509"
 			  :serial t
 			  :components ((:file "extensions")
-				       (:file "x509")))
+				       (:file "x509")
+				       (:file "ocsp")
+				       (:file "validate")))
 			 (:module "PEM"
 			  :components ((:file "rfc7468")))
 			 (:module "tls"
 			  :components
-				  ((:file "ciphersuites")
+				  ((:file "transport")
+				   (:file "http")
+				   (:file "ciphersuites")
 				   (:file "alert")
 				   (:file "crypto")
 				   (:file "extensions")

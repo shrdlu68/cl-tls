@@ -716,6 +716,8 @@
 			    (when peer-dns-name
 			      (fast-io:fast-write-sequence
 			       (create-sni peer-dns-name) ext))
+			    ;; CertificateStatusRequest
+			    
 			    ;; Other extensions
 			    ))
 			(ext-len (length extensions)))
@@ -987,8 +989,9 @@
 	   :log "Malformed certificate message"
 	   :alert :decode-error))
   ;; Convert each certificate to an x509 hash-table
-  (let* ((certificates (make-array 0 :element-type 'hash-table
-				     :adjustable t :fill-pointer 0)))
+  (let* ((raw-certificates (make-array 0 :element-type 'hash-table
+				     :adjustable t :fill-pointer 0))
+	 certificates)
     (handler-case
 	(fast-io:with-fast-input (certs-stream buffer nil 7)
 	  (loop
@@ -1001,19 +1004,24 @@
 	    for cert = (fast-io:make-octet-vector length)
 	    do
 	       (fast-io:fast-read-sequence cert certs-stream)
-	       (vector-push-extend
-		(handler-case
-		    (x509-decode cert)
-		  (x509-decoding-error (err)
-		    (error 'exception
-			   :log (format nil "Error parsing certificate: ~A" (text err))
-			   :alert :bad-certificate)))
-		certificates)))
+	       (vector-push-extend cert raw-certificates)))
       (end-of-file nil
 	(error 'exception
 	       :log "Invalid encoding of certificate message"
 	       :alert :decode-error)))
-    (unless (validate session certificates)
+    (setf certificates (make-array (length raw-certificates)
+				   :element-type 'hash-table))
+    (loop for index upfrom 0 below (length certificates)
+	  for cert = (aref raw-certificates index)
+	  do
+	     (setf (aref certificates index)
+		   (handler-case
+		       (x509-decode cert)
+		     (x509-decoding-error (err)
+		       (error 'exception
+			      :log (format nil "Error parsing certificate: ~A" (text err))
+			      :alert :bad-certificate)))))
+    (unless (validate session certificates raw-certificates)
       (error 'exception
 	     :log "Certificate path validation failed"
 	     :alert :bad-certificate))

@@ -131,6 +131,9 @@
 			(:integer
 			 (octets-to-integer contents
 					    :start (if (zerop (aref contents 0)) 1 0)))
+			(:enumerated
+			 (octets-to-integer contents
+					    :start (if (zerop (aref contents 0)) 1 0)))
 			(:oid
 			 (decode-oid contents))
 			(:utf8-string
@@ -201,6 +204,158 @@
     (end-of-file nil
       (error 'asn.1-decoding-error :text "Premature EOF"))))
 
+(defclass octet-stream ()
+  ((octet-vector :initarg :ov)
+   (length :initarg :len)
+   (position :initform 0)))
+
+(defun make-octet-stream (octet-vector)
+  (make-instance 'octet-stream
+		 :ov octet-vector
+		 :len (length octet-vector)))
+
+(defgeneric ov-read-byte (os))
+
+(defmethod ov-read-byte ((os octet-stream))
+  (with-slots (octet-vector length position) os
+    (cond ((= length position)
+	   (error 'end-of-file))
+	  (t
+	   (let ((uint8 (aref octet-vector position)))
+	     (incf position)
+	     uint8)))))
+
+(defgeneric ov-read-sequence (ov os))
+
+(defmethod ov-read-sequence (ov (os octet-stream))
+  (with-slots (octet-vector length position) os
+    (loop for index from 0 below (length ov) do
+      (setf (aref ov index) (ov-read-byte os))))
+  ov)
+
+(defun ov-buffer-position (os)
+  (slot-value os 'position))
+
+(defun get-der-contents-indices (octet-stream)
+  "Decodes the Type and length fields, and returns bounding
+   array indices of the contents octets."
+  (handler-case
+      (let (element-length element-type class constructedp identifier-octet)
+	(setf identifier-octet (ov-read-byte octet-stream))
+	;; Class
+	(case (ldb (byte 2 6) identifier-octet)
+	  (0
+	   (setf class :universal))
+	  (1
+	   (setf class :application))
+	  (2
+	   (setf class :private))
+	  (3
+	   (setf class :context-specific)))
+	;; Constructed or primitive?
+	(unless (zerop (ldb (byte 1 5) identifier-octet))
+	  (setf constructedp t))
+	;; x509 uses tag numbers between 0 and 30, therefore we only expect the low tag form
+	(if (eql class :universal)
+	    (case (ldb (byte 5 0) identifier-octet)
+	      ;; Universal types
+	      (1
+	       (setf element-type :boolean))
+	      (2
+	       (setf element-type :integer))
+	      (3
+	       (setf element-type :bit-string))
+	      (4
+	       (setf element-type :octet-string))
+	      (5
+	       (setf element-type :null))
+	      (6
+	       (setf element-type :oid))
+	      (7
+	       (setf element-type :object-descriptor))
+	      (8
+	       (setf element-type :instance-of))
+	      (9
+	       (setf element-type :real))
+	      (10
+	       (setf element-type :enumerated))
+	      (11
+	       (setf element-type :embedded-pdv))
+	      (12
+	       (setf element-type :utf8-string))
+	      (13
+	       (setf element-type :relative-oid))
+	      (16
+	       (setf element-type :sequence))
+	      (17
+	       (setf element-type :set))
+	      (18
+	       (setf element-type :numeric-string))
+	      (19
+	       (setf element-type :printable-string))
+	      (20
+	       (setf element-type :telex-string))
+	      (21
+	       (setf element-type :videotext-string))
+	      (22
+	       (setf element-type :ia5-string))
+	      (23
+	       (setf element-type :utc-time))
+	      (24
+	       (setf element-type :generalized-time))
+	      (25
+	       (setf element-type :graphic-string))
+	      (26
+	       (setf element-type :visible-string))
+	      (27
+	       (setf element-type :general-string))
+	      (28
+	       (setf element-type :universal-string))
+	      (29
+	       (setf element-type :character-string))
+	      (30
+	       (setf element-type :bmp-string))
+	      ;; No recognized type found, return the tag number instead
+	      (otherwise
+	       (error 'asn.1-decoding-error :text "Unrecognized primitive tag")))
+	    (setf element-type (ldb (byte 5 0) identifier-octet)))
+	(let ((first-length-octet (ov-read-byte octet-stream)))
+	  (cond ((zerop (ldb (byte 1 7) first-length-octet))
+		 ;; First bit is 0, length is in short form
+		 (setf element-length first-length-octet))
+		(t
+		 ;; First bit is 1, length is in long form-the first octet states how many
+		 ;; octets the actual length occupies
+		 (let* ((length-octets-length (ldb (byte 7 0) first-length-octet))
+			(length-octets (fast-io:make-octet-vector length-octets-length)))
+		   (ov-read-sequence length-octets octet-stream)
+		   (setf element-length (octets-to-integer length-octets))))))
+	(let* ((contents-start (ov-buffer-position octet-stream))
+	       (contents-end (+ contents-start element-length)))
+	  (setf (slot-value octet-stream 'position) contents-end)
+	  (values element-type contents-start contents-end
+		  class constructedp)))
+    (end-of-file nil
+      (error 'asn.1-decoding-error :text "Premature EOF"))))
+
+(defun asn-sequence-to-indices (vec &optional contents-start)
+  "Given an asn sequence, return a list of the types of elements in them and their
+   start and end positions in the vector"
+  (handler-case
+      (let* ((os (make-octet-stream vec))
+	     (sequence-contents-start
+	       (or contents-start
+		   (multiple-value-bind (type start) (get-der-contents-indices os)
+		     (unless (eql type :sequence)
+		       (error 'asn.1-decoding-error "Expected sequence"))
+		     start))))
+	(with-slots (position length) os
+	  (setf position sequence-contents-start)
+	  (loop while (< position length)
+		collecting (multiple-value-list (get-der-contents-indices os)))))
+    (end-of-file nil
+      (error 'asn.1-decoding-error :text "Malformed ASN sequence"))))
+
 (defun decode-oid (vec)
   "Decode an OID into a list of integers"
   (let (ints vlqs)
@@ -252,44 +407,47 @@
 	     (fast-io:fast-write-sequence (integer-to-vlq num) out)
 	     (fast-io:fast-write-byte num out)))))
 
-(defun asn-serialize (obj type &key (class :universal))
-  (let ((primitivep t))
-    (case type
-      (:integer
-       (setf obj (integer-to-octets obj))
-       (setf type 2))
-      (:sequence
-       (setf type 16)
-       (setf primitivep nil))
-      (:oid
-       (setf obj (encode-oid obj))
-       (setf type 6))
-      (:octet-string
-       (setf type 4))
-      (:null
-       (return-from asn-serialize (fast-io:octets-from #(#x05 #x00))))
-      ;; 
-      )
-    (let ((identifier-octet #x00)
-	  (len (length obj)))
-      (fast-io:with-fast-output (out)
-	(setf (ldb (byte 2 6) identifier-octet)
-	      (ecase class
-		(:universal 0)
-		(:application 1)
-		(:context-specific 2)
-		(:private 3)))
-	(or primitivep
-	    (setf (ldb (byte 1 5) identifier-octet) 1))
-	(setf (ldb (byte 5 0) identifier-octet) type)
-	(fast-io:fast-write-byte identifier-octet out)
-	(cond ((> len 127)
-	       (fast-io:fast-write-byte
-		(logior #b10000000 (bytes-in-int len)) out)
-	       (fast-io:fast-write-sequence (integer-to-octets len) out))
-	      (t
-	       (fast-io:fast-write-byte len out)))
-	(fast-io:fast-write-sequence obj out)))))
+(defun asn-serialize (obj type &key (class :universal) (primitivep t))
+  "Create an ASN structure"
+  (case type
+    (:integer
+     (setf obj (integer-to-octets obj))
+     (setf type 2))
+    (:sequence
+     (setf type 16)
+     (setf primitivep nil))
+    (:oid
+     (setf obj (encode-oid obj))
+     (setf type 6))
+    (:octet-string
+     (setf type 4))
+    (:null
+     (return-from asn-serialize (fast-io:octets-from #(#x05 #x00))))
+    ;; 
+    )
+  (let ((identifier-octet #x00)
+	(len (length obj)))
+    (fast-io:with-fast-output (out)
+      (setf (ldb (byte 2 6) identifier-octet)
+	    (ecase class
+	      (:universal 0)
+	      (:application 1)
+	      (:context-specific 2)
+	      (:private 3)))
+      (or primitivep
+	  (setf (ldb (byte 1 5) identifier-octet) 1))
+      (setf (ldb (byte 5 0) identifier-octet) type)
+      (fast-io:fast-write-byte identifier-octet out)
+      (cond ((> len 127)
+	     (fast-io:fast-write-byte
+	      (logior #b10000000 (bytes-in-int len)) out)
+	     (fast-io:fast-write-sequence (integer-to-octets len) out))
+	    (t
+	     (fast-io:fast-write-byte len out)))
+      (fast-io:fast-write-sequence obj out))))
+
+(defun create-explicit-tag (contents number &optional (class :context-specific))
+  (asn-serialize contents number :class class :primitivep nil))
 	   
 (defun create-asn-sequence (&rest coll)
   (asn-serialize

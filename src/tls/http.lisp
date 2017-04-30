@@ -140,7 +140,8 @@
 		 (error 'http-error :log "Content size past max limit"))
 	    (fast-io:fast-write-sequence chunk out))))
 
-(defun http-get (url &optional body)
+(defun http-request (url &key (method :get) body
+			   (content-type "application/octet-stream"))
   "Retrieve response body of http transaction"
   (prog ((redirections 0))
    redirect
@@ -150,15 +151,20 @@
 		:log "URL is not well-formed"))
      (let* ((headers (concatenate
 		      'string
-		      (format nil "GET ~A HTTP/1.1" (path url)) *crlf*
+		      (format nil "~A ~A HTTP/1.1"
+			      (ecase method
+				(:get "GET")
+				(:post "POST"))
+			      (path url)) *crlf*
 		      (format nil "Host: ~A" (host url)) *crlf*
 		      "Connection: close" *crlf*
-		      (when body
-			(concatenate 'string
-				     "Content-Type: application/octet-stream" *crlf*
-				     (format nil "Content-Length: ~A" (length body))
-				     *crlf*)
-			"")
+		      "Accept-Encoding: identity" *crlf*
+		      (if body
+			  (concatenate 'string
+				       (format nil "Content-Type: ~A" content-type) *crlf*
+				       (format nil "Content-Length: ~A" (length body))
+				       *crlf*)
+			  "")
 		      *crlf*))
 	    (address (make-instance 'address
 				    :host (host url)
@@ -215,7 +221,7 @@
 	    ;; Redirect
 	    (setf url (header-value "Location" response-headers))
 	    (or url (error 'http-error
-			   :log "Received a redirect byt no Location header"))
+			   :log "Received a redirect but no Location header"))
 	    (incf redirections)
 	    (when (> redirections 5)
 	      (error 'http-error :log "Too many redirections"))

@@ -350,7 +350,7 @@
 			     ('(1 3 6 1 5 5 7 3 6) :ipsec-tunnel)
 			     ('(1 3 6 1 5 5 7 3 7) :ipsec-user)
 			     ('(1 3 6 1 5 5 7 3 8) :time-stamping)
-			     ('(1 3 6 1 5 5 7 3 9) :oscp-signing)
+			     ('(1 3 6 1 5 5 7 3 9) :ocsp-signing)
 			     (otherwise (second key-purpose-id)))))))
     (asn.1-decoding-error (e)
       (error 'x509-decoding-error
@@ -420,11 +420,12 @@
 		(setf (getf info-access :ca-issuers)
 		      (parse-general-name access-location)))
 	       ((equal access-method '(1 3 6 1 5 5 7 48 1));; id-ad-ocsp
-		(setf (getf info-access :oscp)
+		(setf (getf info-access :ocsp)
 		      (parse-general-name access-location))))))
       info-access)))
 
-(defmethod process-extension (x509 critical-p value (type (eql :authority-information-access)))
+(defmethod process-extension (x509 critical-p value
+			      (type (eql :authority-information-access)))
   (handler-case
       (setf (gethash :authority-information-access x509) (parse-access-description value))
     (asn.1-decoding-error (e)

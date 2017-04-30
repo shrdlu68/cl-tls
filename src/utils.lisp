@@ -130,7 +130,7 @@
   
 (defun dump-to-file (ov file-spec)
   (with-open-file (fd file-spec :direction :output
-		      :if-does-not-exist :create :if-exists :overwrite
+		      :if-does-not-exist :create :if-exists :supersede
 		      :element-type 'octet)
     (loop for uint8 across ov do
 	 (write-byte uint8 fd))))
