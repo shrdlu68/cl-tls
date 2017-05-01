@@ -22,6 +22,8 @@
 
 (defparameter *max-fragment-length* (expt 2 14))
 
+(defparameter *max-certificate-chain-length* 20)
+
 (define-condition exception (error)
   ((log :initarg :log :accessor log-info)
    (alert :initarg :alert :accessor alert)))
@@ -664,9 +666,6 @@
       (error 'exception
 	     :log "Malformed CertificateVerify"
 	     :alert :decode-error)
-      (dump-to-file (ironclad:digest-sequence :sha512 handshake-messages)
-		    "/tmp/dig")
-      (dump-to-file handshake-messages "/tmp/H")
       (or (verify-signed-data session handshake-messages algorithm signature)
 	  (error 'exception
 		 :log "Signature verification failed in certificateVerify"
@@ -1009,6 +1008,10 @@
 	(error 'exception
 	       :log "Invalid encoding of certificate message"
 	       :alert :decode-error)))
+    (when (> (length raw-certificates) *max-certificate-chain-length*)
+      (error 'exception
+	     :log "Peer sent a certificate chain of more than maximum allowed (20)"
+	     :alert :decode-error))
     (setf certificates (make-array (length raw-certificates)
 				   :element-type 'hash-table))
     (loop for index upfrom 0 below (length certificates)

@@ -42,8 +42,8 @@
 		 "An error occured while checking the status of the certificate. Details: ~A"
 		 (log-info err))
 		:error)))))
-    (and ocsp-status
-	 (eql ocsp-status :good))))
+    (or (null ocsp-status)
+	(eql ocsp-status :good))))
 
 (defun validate (session decoded-chain raw-chain)
   "Certificate Path validation. decode-chain is the chain of certificates, decoded.
