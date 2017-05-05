@@ -1,64 +1,75 @@
 ;; An implementation of PKCS#8, see rfc5208
 (in-package :cl-tls)
 
-(defun parse-priv-key (ov ht)
-  (case (gethash :public-key-algorithm ht)
-    ;; RSAPrivateKey ::= SEQUENCE {
-    ;; version Version,
-    ;; modulus INTEGER, -- n
-    ;; publicExponent INTEGER, -- e
-    ;; privateExponent INTEGER, -- d
-    ;; prime1 INTEGER, -- p
-    ;; prime2 INTEGER, -- q
-    ;; exponent1 INTEGER, -- d mod (p-1)
-    ;; exponent2 INTEGER, -- d mod (q-1)
-    ;; coefficient INTEGER -- (inverse of q) mod p }
-    ;;    Version ::= INTEGER
-    (:rsa
-     (let ((rsa-private-key (multiple-value-list
-			    (parse-der ov))))
-       (unless (eql (first rsa-private-key) :sequence)
-	 (error 'x509-decoding-error "The RSAPrivateKey should contain an ASN.1 sequence"))
-       (setf rsa-private-key (second rsa-private-key))
-       (unless (= (length rsa-private-key) 9)
-	 (error "RSAPrivateKey ASN.1 sequence should have 9 elements"))
-       (loop for element in rsa-private-key do
-	    (unless (eql (first element) :integer)
-	      (error 'x509-decoding-error :text "Expected integers in RSAPrivateKey.")))
-       (setf (gethash :version ht) (second (first rsa-private-key)))
-       (setf (gethash :modulus ht) (second (second rsa-private-key)))
-       (setf (gethash :public-exponent ht) (second (third rsa-private-key)))
-       (setf (gethash :private-exponent ht) (second (fourth rsa-private-key)))
-       (setf (gethash :p ht) (second (fifth rsa-private-key)))
-       (setf (gethash :q ht) (second (sixth rsa-private-key)))
-       (setf (gethash :exponent1 ht) (second (seventh rsa-private-key)))
-       (setf (gethash :exponent2 ht) (second (eighth rsa-private-key)))
-       (setf (gethash :coefficient ht) (second (ninth rsa-private-key)))))
-    ;; DSAPrivateKey ::= OCTETSTRING {
-    ;; privateExponent INTEGER
-    ;; }
-    (:dsa
-     (let ((dsa-private-key (multiple-value-list
-			    (parse-der ov))))
-       (unless (eql (first dsa-private-key) :integer)
-	 (error "Expected a DSA private key"))
-       (setf (gethash :dsa-private-exponent ht) (second dsa-private-key))))
-    ;; DH --see PKCS#3
-    (:dh
-     (let ((dh-private-value (multiple-value-list
-			     (parse-der ov))))
-       (unless (eql (first dh-private-value) :integer)
-	 (error 'x509-decoding-error :text "Invalid encoding of DHPrivateValue"))
-       (setf (gethash :dh-X ht) (second dh-private-value))))))
+(defun parse-priv-key (ov private-key-algorithm)
+  (let (private-key-info)
+    (case private-key-algorithm
+      ;; RSAPrivateKey ::= SEQUENCE {
+      ;; version Version,
+      ;; modulus INTEGER, -- n
+      ;; publicExponent INTEGER, -- e
+      ;; privateExponent INTEGER, -- d
+      ;; prime1 INTEGER, -- p
+      ;; prime2 INTEGER, -- q
+      ;; exponent1 INTEGER, -- d mod (p-1)
+      ;; exponent2 INTEGER, -- d mod (q-1)
+      ;; coefficient INTEGER -- (inverse of q) mod p }
+      ;;    Version ::= INTEGER
+      (:rsa
+       (let ((rsa-private-key (multiple-value-list
+			       (parse-der ov))))
+	 (unless (eql (first rsa-private-key) :sequence)
+	   (error 'x509-decoding-error "The RSAPrivateKey should contain an ASN.1 sequence"))
+	 (setf rsa-private-key (second rsa-private-key))
+	 (unless (= (length rsa-private-key) 9)
+	   (error "RSAPrivateKey ASN.1 sequence should have 9 elements"))
+	 (loop for element in rsa-private-key do
+	   (unless (eql (first element) :integer)
+	     (error 'x509-decoding-error :text "Expected integers in RSAPrivateKey.")))
+	 (setf (getf private-key-info :version)
+	       (second (first rsa-private-key)))
+	 (setf (getf private-key-info :modulus)
+	       (second (second rsa-private-key)))
+	 (setf (getf private-key-info :public-exponent)
+	       (second (third rsa-private-key)))
+	 (setf (getf private-key-info :private-exponent)
+	       (second (fourth rsa-private-key)))
+	 (setf (getf private-key-info :p)
+	       (second (fifth rsa-private-key)))
+	 (setf (getf private-key-info :q)
+	       (second (sixth rsa-private-key)))
+	 (setf (getf private-key-info :exponent1)
+	       (second (seventh rsa-private-key)))
+	 (setf (getf private-key-info :exponent2)
+	       (second (eighth rsa-private-key)))
+	 (setf (getf private-key-info :coefficient)
+	       (second (ninth rsa-private-key)))))
+      ;; DSAPrivateKey ::= OCTETSTRING {
+      ;; privateExponent INTEGER
+      ;; }
+      (:dsa
+       (let ((dsa-private-key (multiple-value-list
+			       (parse-der ov))))
+	 (unless (eql (first dsa-private-key) :integer)
+	   (error "Expected a DSA private key"))
+	 (setf (getf private-key-info :dsa-private-exponent) (second dsa-private-key))))
+      ;; DH --see PKCS#3
+      (:dh
+       (let ((dh-private-value (multiple-value-list
+				(parse-der ov))))
+	 (unless (eql (first dh-private-value) :integer)
+	   (error 'x509-decoding-error :text "Invalid encoding of DHPrivateValue"))
+	 (setf (getf private-key-info :dh-X) (second dh-private-value)))))
+    private-key-info))
 
 (defun load-der-priv-key (octet-vector)
   "Load a PKCS#8-encoded (rfc5208) private key file"
   (let* ((pki (multiple-value-bind (element-type contents)
 		  (parse-der octet-vector)
 		(unless (eql element-type :sequence)
-		  (error "Error Loading Private Key: The encoding is erroneous or unrecognized"))
-	        contents))
-	 (key (make-hash-table)))
+		  (error
+		   "Error Loading Private Key: The encoding is erroneous or unrecognized"))
+	        contents)))
     ;; EncryptedPrivateKeyInfo ::= SEQUENCE {
     ;; encryptionAlgorithm  EncryptionAlgorithmIdentifier,
     ;;         encryptedData        EncryptedData }
@@ -66,37 +77,35 @@
       (setf octet-vector
 	    (pbes2-decrypt octet-vector
 			   (progn
-			     (format t "~&Enter the passphrase for the private key file:~%")
+			     (format t
+				     "~&Enter the passphrase for the private key file:~%")
 			     (read-line))))
       (setf pki (multiple-value-bind (element-type contents)
 		    (parse-der octet-vector)
 		  (unless (eql :sequence element-type)
-		    (error "Error Loading Private Key: The encoding of the key is erroneous or unrecognized"))
+		    (error
+		     "Error Loading Private Key: The encoding of the key is erroneous or unrecognized"))
 		  contents)))
     ;; Version ::= INTEGER TODO: Ignore for now
     ;; PrivateKeyAlgorithmIdentifier ::= AlgorithmIdentifier
-    (parse-pka (second (second pki)) key)
-    ;; PrivateKey ::= OCTET STRING
-    (parse-priv-key (second (third pki)) key)
-    ;; (loop
-    ;;    for k being each hash-key of key
-    ;;    for v being each hash-value of key do
-    ;; 	 (format t "~&~S: ~S~%" k v))
-    ;; Attributes ::= SET OF Attribute TODO
-    key))
+    (let ((algorithm-identifier (parse-pka (second (second pki)))))
+      ;; PrivateKey ::= OCTET STRING
+      (append (list :private-key-algorithm (car algorithm-identifier))
+	      (list :private-key-parameters (cdr algorithm-identifier))
+	      (parse-priv-key (second (third pki)) (car algorithm-identifier))))))
 
 (defun load-pem-priv-key (character-vector)
   "Load a PEM-encoded Private key; PEM-encoded keys should be just base64-encoded PKCS#8
 PrivateKeyInfo structures with a header and a footer. But they're sometimes not, instead being just the
 privateKey-RSAPrivateKey and DSAPrivateKey."
   (let ((pem (first (parse-pem character-vector)))
-	(key (make-hash-table)))
+	key)
     (cond
       ((equal (car pem) "RSA PRIVATE KEY")
-       (setf (gethash :public-key-algorithm key) :rsa)
-       (parse-priv-key (cdr pem) key))
+       (setf key (parse-priv-key (cdr pem) :rsa))
+       (setf key (append (list :private-key-algorithm :rsa)
+			 key)))
       ((equal (car pem) "DSA PRIVATE KEY")
-       (setf (gethash :public-key-algorithm key) :dsa)
        ;; Compatibility with keys encoded as a sequence containing
        ;; the version p, q, g, public, and private components
        (multiple-value-bind (asn-type contents) (parse-der (cdr pem))
@@ -107,11 +116,12 @@ privateKey-RSAPrivateKey and DSAPrivateKey."
 	   (error "Could load load private key, unknown encoding" ))
 	 (destructuring-bind (v p q g y x) contents
 	   (declare (ignorable v))
-	   (setf (gethash :dsa-p key) (second p))
-	   (setf (gethash :dsa-q key) (second q))
-	   (setf (gethash :dsa-g key) (second g))
-	   (setf (gethash :dsa-x key) (second x))
-	   (setf (gethash :dsa-y key) (second y)))))
+	   (setf key (list :private-key-algorithm :dsa
+			   :dsa-p (second p)
+			   :dsa-q (second q)
+			   :dsa-g (second g)
+			   :dsa-x (second x)
+			   :dsa-y (second y))))))
       ((or (equal (car pem) "PRIVATE KEY")
 	   (equal (car pem) "ENCRYPTED PRIVATE KEY"))
        (return-from load-pem-priv-key (load-der-priv-key (cdr pem)))))

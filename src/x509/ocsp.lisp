@@ -71,52 +71,53 @@
 
 (defun verify-ocsp-signature (signing-certificate response-data
 			      signature signature-algorithm)
-  (multiple-value-bind (signature-alg hash-alg)
-      (parse-signature-algorithm signature-algorithm)
-    (unless (eql signature-alg
-		 (gethash :public-key-algorithm signing-certificate))
-      (return-from verify-ocsp-signature nil))
-    (let* ((verification-digest (ironclad:digest-sequence hash-alg
-							  response-data)))
-      (case signature-alg
-	(:rsa
-	 (let ((pub-key (ironclad:make-public-key
-			 :rsa
-			 :n (gethash :modulus signing-certificate)
-			 :e (gethash :public-exponent signing-certificate))))
-	   (setf signature (rsa-encrypt signature pub-key))
-	   (unless (= (aref signature 0) 1)
-	     (return-from verify-ocsp-signature nil))
-	   (setf signature (subseq signature (1+ (position 0 signature))))
-	   (multiple-value-bind (asn-type digest-info) (ocsp-catch-asn-error
-							(parse-der signature))
-	     (unless (and (eql asn-type :sequence)
-			  (= (length digest-info) 2))
+  (let* ((tbs (tbs-certificate signing-certificate))
+	 (pki (subject-pki tbs))
+	 (pk-algorithm (car (getf pki :algorithm-identifier)))
+	 (pk (getf pki :subject-public-key)))
+    (multiple-value-bind (signature-alg hash-alg)
+	(parse-signature-algorithm signature-algorithm)
+      (unless (eql signature-alg pk-algorithm)
+	(return-from verify-ocsp-signature nil))
+      (let* ((verification-digest (ironclad:digest-sequence hash-alg
+							    response-data)))
+	(case signature-alg
+	  (:rsa
+	   (let ((pub-key (ironclad:make-public-key :rsa
+						    :n (getf pk :modulus)
+						    :e (getf pk :public-exponent))))
+	     (setf signature (rsa-encrypt signature pub-key))
+	     (unless (= (aref signature 0) 1)
 	       (return-from verify-ocsp-signature nil))
-	     (destructuring-bind (digest-algorithm digest) digest-info
-	       (declare (ignorable digest-algorithm))
-	       (unless (eql (first digest) :octet-string)
-		 (return-from verify-ocsp-signature nil))
-	       (setf digest (second digest))
-	       (timing-independent-compare verification-digest digest)))))
-	(:dsa
-	 (let ((pub-key
-		 (ironclad:make-public-key
-		  :dsa
-		  :p (gethash :dsa-p signing-certificate)
-		  :q (gethash :dsa-q signing-certificate)
-		  :g (gethash :dsa-g signing-certificate)
-		  :y (gethash :dsa-public-key signing-certificate))))
-	   (multiple-value-bind (asn-type dss-sig-value) (ocsp-catch-asn-error
+	     (setf signature (subseq signature (1+ (position 0 signature))))
+	     (multiple-value-bind (asn-type digest-info) (ocsp-catch-asn-error
 							  (parse-der signature))
-	     (unless (and (eql asn-type :sequence)
-			  (= (length dss-sig-value) 2))
-	       (return-from verify-ocsp-signature nil))
-	     (unless (every (lambda (arg)
-			      (asn-type-matches-p :integer arg)) dss-sig-value))
-	     (destructuring-bind (r s) dss-sig-value
-	       (setf signature (ironclad:make-dsa-signature (second r) (second s)))
-	       (ironclad:verify-signature pub-key verification-digest signature)))))))))
+	       (unless (and (eql asn-type :sequence)
+			    (= (length digest-info) 2))
+		 (return-from verify-ocsp-signature nil))
+	       (destructuring-bind (digest-algorithm digest) digest-info
+		 (declare (ignorable digest-algorithm))
+		 (unless (eql (first digest) :octet-string)
+		   (return-from verify-ocsp-signature nil))
+		 (setf digest (second digest))
+		 (timing-independent-compare verification-digest digest)))))
+	  (:dsa
+	   (let ((pub-key
+		   (ironclad:make-public-key :dsa
+					     :p (getf pk :dsa-p)
+					     :q (getf pk :dsa-q)
+					     :g (getf pk :dsa-g)
+					     :y (getf pk :dsa-public-key))))
+	     (multiple-value-bind (asn-type dss-sig-value) (ocsp-catch-asn-error
+							    (parse-der signature))
+	       (unless (and (eql asn-type :sequence)
+			    (= (length dss-sig-value) 2))
+		 (return-from verify-ocsp-signature nil))
+	       (unless (every (lambda (arg)
+				(asn-type-matches-p :integer arg)) dss-sig-value))
+	       (destructuring-bind (r s) dss-sig-value
+		 (setf signature (ironclad:make-dsa-signature (second r) (second s)))
+		 (ironclad:verify-signature pub-key verification-digest signature))))))))))
 
 (defun parse-response-data (data serial)
   (flet ((fail ()
@@ -214,123 +215,126 @@
 	    (2 :unknown)
 	    (otherwise (error 'ocsp-error :log "Invalid certificate status.")))))))))
 
-(defun check-ocsp (subject raw-subject issuer raw-issuer)
+(defun check-ocsp (subject issuer)
   "Return the status of the certificate or signal an error"
-  (let* ((ocsp-location (getf
-			 (gethash :authority-information-access subject)
-			 :ocsp))
-	 (url (cdr ocsp-location))
-	 (issuer-dn-octets (get-issuer-octets raw-subject))
-	 (issuer-pubkey-octets (get-pubkey-octets raw-issuer))
-	 (serial (gethash :serial subject))
-	 (ocsp-request (prepare-ocsp-request (list (list issuer-dn-octets
-							 issuer-pubkey-octets
-							 serial))))
-	 (ocsp-response
-	   (handler-case
-	       (http-request url
-			     :method :post
-			     :content-type "application/ocsp-request"
-			     :body ocsp-request)
-	     (http-error (err)
-	       (error 'ocsp-error :log (format nil "A HTTP error occured while sending an OCSP request. Details: ~A" (log-info err)))))))
-    ;; (format t "~&Checking OCSP from url [~S]~%" url)
-    (flet ((fail () (error 'ocsp-error :log "Malformed response")))
-      (setf ocsp-response (multiple-value-list (ocsp-catch-asn-error
-						(parse-der ocsp-response))))
-      (unless (asn-type-matches-p :sequence ocsp-response)
-	(fail))
-      (setf ocsp-response (second ocsp-response))
-      (unless (<= 1 (length ocsp-response) 2) (fail))
-      (destructuring-bind (response-status &optional response-bytes)
-	  ocsp-response
-	(unless (asn-type-matches-p :enumerated response-status)
-	  (fail))
-	(when response-bytes
-	  (unless (= 0 (first response-bytes))
+  (with-slots ((raw-subject raw) (subject-tbs tbs-certificate)) subject
+    (with-slots ((raw-issuer raw)) issuer
+      (let* ((ocsp-location (getf
+			     (authority-information-access (extensions subject-tbs))
+			     :ocsp))
+	     (url (cdr ocsp-location))
+	     (issuer-dn-octets (get-issuer-octets raw-subject))
+	     (issuer-pubkey-octets (get-pubkey-octets raw-issuer))
+	     (serial (serial subject-tbs))
+	     (ocsp-request (prepare-ocsp-request (list (list issuer-dn-octets
+							     issuer-pubkey-octets
+							     serial))))
+	     (ocsp-response
+	       (handler-case
+		   (http-request url
+				 :method :post
+				 :content-type "application/ocsp-request"
+				 :body ocsp-request)
+		 (http-error (err)
+		   (error 'ocsp-error :log (format nil "A HTTP error occured while sending an OCSP request. Details: ~A" (log-info err)))))))
+	;; (format t "~&Checking OCSP from url [~S]~%" url)
+	(flet ((fail () (error 'ocsp-error :log "Malformed response")))
+	  (setf ocsp-response (multiple-value-list (ocsp-catch-asn-error
+						    (parse-der ocsp-response))))
+	  (unless (asn-type-matches-p :sequence ocsp-response)
 	    (fail))
-	  (setf response-bytes (multiple-value-list
-				(ocsp-catch-asn-error (parse-der (second response-bytes)))))
-	  (unless (asn-type-matches-p :sequence response-bytes)
-	    (fail))
-	  (setf response-bytes (second response-bytes)))
-	(case (second response-status)
-	  (0;;Successful
-	   (or response-bytes
-	       (error 'ocsp-error :log "No responseBytes received"))
-	   (unless (= 2 (length response-bytes))
-	     (fail))
-	   (destructuring-bind (response-type response) response-bytes
-	     (unless (and (asn-type-matches-p :oid response-type)
-			  (asn-type-matches-p :octet-string response))
-	       (fail))
-	     (unless (equal (second response-type)
-			    (append *id-ad-ocsp* '(1)))
-	       (error 'ocsp-error :log "Unknown OCSP response type"))
-	     (setf response
-		   (multiple-value-list
-		    (ocsp-catch-asn-error (parse-der (second response) :mode :serialized))))
-	     (unless (asn-type-matches-p :sequence response)
-	       (fail))
-	     (setf response (ocsp-catch-asn-error (asn-sequence-to-list (second response)
-						  :mode :serialized)))
-	     (unless (<= 3 (length response) 4) (fail))
-	     (destructuring-bind (response-data signature-algorithm
-				  signature &optional certs) response
-	       (setf signature-algorithm
-		     (ocsp-catch-asn-error
-		      (asn-sequence-to-list (second signature-algorithm))))
-	       (unless (and (asn-type-matches-p :sequence response-data)
-			    (asn-type-matches-p :bit-string signature))
+	  (setf ocsp-response (second ocsp-response))
+	  (unless (<= 1 (length ocsp-response) 2) (fail))
+	  (destructuring-bind (response-status &optional response-bytes)
+	      ocsp-response
+	    (unless (asn-type-matches-p :enumerated response-status)
+	      (fail))
+	    (when response-bytes
+	      (unless (= 0 (first response-bytes))
+		(fail))
+	      (setf response-bytes (multiple-value-list
+				    (ocsp-catch-asn-error (parse-der (second response-bytes)))))
+	      (unless (asn-type-matches-p :sequence response-bytes)
+		(fail))
+	      (setf response-bytes (second response-bytes)))
+	    (case (second response-status)
+	      (0;;Successful
+	       (or response-bytes
+		   (error 'ocsp-error :log "No responseBytes received"))
+	       (unless (= 2 (length response-bytes))
 		 (fail))
-	       (setf response-data (second response-data))
-	       (setf signature (subseq (second signature) 1))
-	       (cond (certs
-		      ;; CA has designated OCSP signing.
-		      ;; The certificate that signed the response
-		      ;; is in certs
-		      (unless (= (first certs) 0) (fail))
-		      (setf certs (ocsp-catch-asn-error
-				   (asn-sequence-to-list (second certs)
-							 :mode :serialized)))
-		      (let* ((signer (x509-decode (second (first certs))))
-			     (extended-ku (gethash :extended-key-usage signer)))
-			;; Ensure the OCSP-sign key-usage bit is set
-			(unless (member :ocsp-signing extended-ku)
-			  (error 'ocsp-error
-				 :log
-				 "OCSP-sign bit is not set in signer's certificate"))
-			;; Verify time validity
-			(unless (time-valid-p signer)
-			  (error 'ocsp-error
-				 :log "OCSP signer's certificate is out of date"))
-			;; Verify signature
-			(unless (verify-signature signer issuer)
-			  (error 'ocsp-error
-				 :log "OCSP signer's certificate is not issued by CA"))
-			;; Check the ocsp signature
-			(unless (verify-ocsp-signature
-				 signer
-				 (asn-serialize response-data :sequence)
-				 signature signature-algorithm)
-			  (error 'ocsp-error :log "Bad OCSP signature"))))
-		     (t
-		      ;; The CA (issuer) is the OCSP signer
-		      (unless (verify-ocsp-signature
-			       issuer
-			       (asn-serialize response-data :sequence)
-			       signature signature-algorithm)
-			(error 'ocsp-error :log "Bad OCSP signature"))))
-	       (parse-response-data response-data serial))))
-	  (1;;malformedRequest
-	   (error 'ocsp-error :log "Response status: malformedRequest"))
-	  (2;;internalError
-	   (error 'ocsp-error :log "Response status: InternalError"))
-	  (3;;tryLater
-	   (error 'ocsp-error :log "Response status: tryLater"))
-	  (5;;sigRequired
-	   (error 'ocsp-error :log "Response status: sigRequired"))
-	  (6;;unauthorized
-	   (error 'ocsp-error :log "Response status: unauthorized"))
-	  (otherwise
-	   (error 'ocsp-error :log "Unknown reponse status")))))))
+	       (destructuring-bind (response-type response) response-bytes
+		 (unless (and (asn-type-matches-p :oid response-type)
+			      (asn-type-matches-p :octet-string response))
+		   (fail))
+		 (unless (equal (second response-type)
+				(append *id-ad-ocsp* '(1)))
+		   (error 'ocsp-error :log "Unknown OCSP response type"))
+		 (setf response
+		       (multiple-value-list
+			(ocsp-catch-asn-error (parse-der (second response) :mode :serialized))))
+		 (unless (asn-type-matches-p :sequence response)
+		   (fail))
+		 (setf response (ocsp-catch-asn-error (asn-sequence-to-list (second response)
+									    :mode :serialized)))
+		 (unless (<= 3 (length response) 4) (fail))
+		 (destructuring-bind (response-data signature-algorithm
+				      signature &optional certs) response
+		   (setf signature-algorithm
+			 (ocsp-catch-asn-error
+			  (asn-sequence-to-list (second signature-algorithm))))
+		   (unless (and (asn-type-matches-p :sequence response-data)
+				(asn-type-matches-p :bit-string signature))
+		     (fail))
+		   (setf response-data (second response-data))
+		   (setf signature (subseq (second signature) 1))
+		   (cond (certs
+			  ;; CA has designated OCSP signing.
+			  ;; The certificate that signed the response
+			  ;; is in certs
+			  (unless (= (first certs) 0) (fail))
+			  (setf certs (ocsp-catch-asn-error
+				       (asn-sequence-to-list (second certs)
+							     :mode :serialized)))
+			  (let* ((signer (x509-decode (second (first certs))))
+				 (extended-ku (extended-key-usage
+					       (extensions (tbs-certificate signer)))))
+			    ;; Ensure the OCSP-sign key-usage bit is set
+			    (unless (member :ocsp-signing extended-ku)
+			      (error 'ocsp-error
+				     :log
+				     "OCSP-sign bit is not set in signer's certificate"))
+			    ;; Verify time validity
+			    (unless (time-valid-p signer)
+			      (error 'ocsp-error
+				     :log "OCSP signer's certificate is out of date"))
+			    ;; Verify signature
+			    (unless (verify-signature signer issuer)
+			      (error 'ocsp-error
+				     :log "OCSP signer's certificate is not issued by CA"))
+			    ;; Check the ocsp signature
+			    (unless (verify-ocsp-signature
+				     signer
+				     (asn-serialize response-data :sequence)
+				     signature signature-algorithm)
+			      (error 'ocsp-error :log "Bad OCSP signature"))))
+			 (t
+			  ;; The CA (issuer) is the OCSP signer
+			  (unless (verify-ocsp-signature
+				   issuer
+				   (asn-serialize response-data :sequence)
+				   signature signature-algorithm)
+			    (error 'ocsp-error :log "Bad OCSP signature"))))
+		   (parse-response-data response-data serial))))
+	      (1;;malformedRequest
+	       (error 'ocsp-error :log "Response status: malformedRequest"))
+	      (2;;internalError
+	       (error 'ocsp-error :log "Response status: InternalError"))
+	      (3;;tryLater
+	       (error 'ocsp-error :log "Response status: tryLater"))
+	      (5;;sigRequired
+	       (error 'ocsp-error :log "Response status: sigRequired"))
+	      (6;;unauthorized
+	       (error 'ocsp-error :log "Response status: unauthorized"))
+	      (otherwise
+	       (error 'ocsp-error :log "Unknown reponse status")))))))))

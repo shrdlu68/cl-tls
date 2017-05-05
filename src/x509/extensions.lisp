@@ -2,7 +2,7 @@
 ;; see https://tools.ietf.org/html/rfc5280#section-4.1.2.9
 (in-package :cl-tls)
 
-(defgeneric process-extension (x509 critical-p value type))
+(defgeneric process-extension (x509-extension critical-p value type))
 
 ;; GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
 
@@ -85,7 +85,7 @@
 	(unless (eql :sequence asn-type)
 	  (error 'x509-decoding-error
 		 :text "Invalid SubjectAlternativeName GeneralNames"))
-	(setf (gethash :subject-alternative-name x509)
+	(setf (subject-alternative-name x509)
 	      (parse-general-names general-names)))
   (asn.1-decoding-error (e)
 			(error 'x509-decoding-error
@@ -96,7 +96,7 @@
       (multiple-value-bind (asn-type general-names) (parse-der value)
 	(unless (eql :sequence asn-type)
 	  (error 'x509-decoding-error :text "Invalid IssuerAlternativeName GeneralNames"))
-	(setf (gethash :issuer-alternative-name x509) (parse-general-names general-names)))
+	(setf (issuer-alternative-name x509) (parse-general-names general-names)))
     (asn.1-decoding-error (e)
       (error 'x509-decoding-error
 	     :text (format nil "An ASN.1 decoding error was encountered while processing the IssuerAlternativeName extension. Details: ~A~%" (slot-value e 'text))))))
@@ -129,7 +129,7 @@
 		  (setf (getf key-id :authority-cert-serial-number)
 			(octets-to-integer (second id))))
 		 (otherwise (fail))))
-	  (setf (gethash :authority-key-identifier x509) key-id)))
+	  (setf (authority-key-identifier x509) key-id)))
     (asn.1-decoding-error (e)
       (error 'x509-decoding-error
 	     :text (format nil "An ASN.1 decoding error was encountered while processing the AuthorityKeyIdentifier extension. Details: ~A~%" (slot-value e 'text))))))
@@ -143,7 +143,7 @@
     (setf value (multiple-value-list (parse-der value)))
     (unless (eql (first value) :octet-string)
       (error 'x509-decoding-error :text "Invalid SubjectKeyIdentifier extension data"))
-    (setf (gethash :subject-key-identifier x509) (second value))))
+    (setf (subject-key-identifier x509) (second value))))
 
 (defmethod process-extension (x509 critical-p value (type (eql :key-usage)))
   (handler-bind ((asn.1-decoding-error
@@ -165,7 +165,7 @@
        (getf usage :crl-sign) (= (ldb (byte 1 6) bit-string) 1)
        (getf usage :encipherment-only) (= (ldb (byte 1 7) bit-string) 1)
        (getf usage :decipherment-only) (= (ldb (byte 1 8) bit-string) 1))
-      (setf (gethash :key-usage x509) usage))))
+      (setf (key-usage x509) usage))))
   
 (defun parse-qualifier (policy-qualifier-id qualifier)
   ;; Qualifier ::= CHOICE {
@@ -264,7 +264,7 @@
 					  (parse-qualifier policy-qualifier-id
 							   qualifier))))))
 		   (setf policies (acons policy-identifier policy policies)))))
-	  (setf (gethash :certificate-policies x509) policies)))
+	  (setf (certificate-policies x509) policies)))
     (asn.1-decoding-error (e)
       (error 'x509-decoding-error
 	     :text (format nil "An ASN.1 decoding error was encountered while processing the CertificatePolicies extension. Details: ~A~%" (slot-value e 'text))))))
@@ -275,7 +275,7 @@
 	       (error 'x509-decoding-error :text "Invalid policyMappings extension data")))
 	(multiple-value-bind (asn-type policy-mappings) (parse-der value)
 	  (unless (eql asn-type :sequence) (fail))
-	  (setf (gethash :policy-mappings x509)
+	  (setf (policy-mappings x509)
 		(loop
 		   for policy-mapping in policy-mappings
 		   do
@@ -315,7 +315,7 @@
 	      (setf
 	       (getf basic-constraints :path-len-constraint)
 	       (second path-len-constraint)))
-	    (setf (gethash :basic-constraints x509) basic-constraints))))
+	    (setf (basic-constraints x509) basic-constraints))))
     (asn.1-decoding-error (e)
       (error 'x509-decoding-error
 	     :text (format nil "An ASN.1 decoding error was encountered while processing the BasicConstarints extension. Details: ~A~%" (slot-value e 'text))))))
@@ -335,7 +335,7 @@
 		      :text "Error parsing ExtendedKeyUsage extension data")))
 	(multiple-value-bind (type contents) (parse-der value)
 	  (unless (eql type :sequence) (fail))
-	  (setf (gethash :extended-key-usage x509)
+	  (setf (extended-key-usage x509)
 		(loop
 		   for key-purpose-id in contents
 		   do
@@ -363,7 +363,7 @@
 		      :text "Error parsing CRLDistributionPoints extension data")))
 	(multiple-value-bind (type crl-distribution-points) (parse-der value)
 	  (unless (eql type :sequence) (fail))
-	  (setf (gethash :crl-distribution-points x509)
+	  (setf (crl-distribution-points x509)
 		(loop
 		   for distribution-point in crl-distribution-points
 		   doing (unless (asn-type-matches-p :sequence distribution-point) (fail))
@@ -427,14 +427,14 @@
 (defmethod process-extension (x509 critical-p value
 			      (type (eql :authority-information-access)))
   (handler-case
-      (setf (gethash :authority-information-access x509) (parse-access-description value))
+      (setf (authority-information-access x509) (parse-access-description value))
     (asn.1-decoding-error (e)
       (error 'x509-decoding-error
 	     :text (format nil "An ASN.1 decoding error was encountered while processing the AuthorityInformationAccess extension. Details: ~A~%" (slot-value e 'text))))))
 
 (defmethod process-extension (x509 critical-p value (type (eql :subject-information-access)))
   (handler-case
-      (setf (gethash :subject-information-access x509) (parse-access-description value))
+      (setf (subject-information-access x509) (parse-access-description value))
     (asn.1-decoding-error (e)
       (error 'x509-decoding-error
 	     :text (format nil "An ASN.1 decoding error was encountered while processing the SubjectInformationAccess extension. Details: ~A~%" (slot-value e 'text))))))

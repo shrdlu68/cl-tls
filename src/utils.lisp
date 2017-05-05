@@ -1,6 +1,8 @@
 ;; Miscallenous helper functions
 (in-package :cl-tls)
 
+(declaim (optimize (debug 3)))
+
 (setf ironclad:*prng* (crypto:make-prng :fortuna :seed :urandom))
 
 (deftype octet ()

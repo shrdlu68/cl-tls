@@ -1024,13 +1024,14 @@
 		       (error 'exception
 			      :log (format nil "Error parsing certificate: ~A" (text err))
 			      :alert :bad-certificate)))))
-    (unless (validate session certificates raw-certificates)
+    (unless (validate session certificates)
       (error 'exception
 	     :log "Certificate path validation failed"
 	     :alert :bad-certificate))
     ;; Parse the primary certificate, the first one in the chain, retrieve the public key)
-    (let* ((certificate (aref certificates 0))
-	   (alt-names (gethash :subject-alternative-name certificate))
+    (let* ((certificate (tbs-certificate (aref certificates 0)))
+	   (extensions (extensions certificate))
+	   (alt-names (subject-alternative-name extensions))
 	   (dns-names (loop
 			for name in alt-names
 			when (eql (car name) :dns-name)
@@ -1038,30 +1039,33 @@
 	   (ip-addresses (loop
 			   for name in alt-names
 			   when (eql (car name) :ip-address)
-			     collect (cdr name))))
+			     collect (cdr name)))
+	   (subject-pki (subject-pki certificate))
+	   (subject-pk-algorithm (getf subject-pki :algorithm-identifier))
+	   (subject-pk (getf subject-pki :subject-public-key)))
       (with-slots (key-exchange-method
 		   authentication-method remote-certificate-type
 		   dh-params dh-Y pub-key
 		   peer-ip-addresses peer-dns-name) session
 	;; Verify the right kind of certificate was sent
-	(setf remote-certificate-type (gethash :public-key-algorithm certificate))
+	(setf remote-certificate-type (first subject-pk-algorithm))
 	(case remote-certificate-type
 	  (:rsa
 	   (setf pub-key
-		 (ironclad:make-public-key :rsa :n (gethash :modulus certificate)
-						:e (gethash :public-exponent certificate))))
+		 (ironclad:make-public-key :rsa :n (getf subject-pk :modulus)
+						:e (getf subject-pk :public-exponent))))
 	  (:dsa
 	   (setf pub-key
 		 (ironclad:make-public-key :dsa
-					   :p (gethash :dsa-p certificate)
-					   :q (gethash :dsa-q certificate)
-					   :g (gethash :dsa-g certificate)
-					   :y (gethash :dsa-public-key certificate))))
+					     :p (getf subject-pk :dsa-p)
+					     :q (getf subject-pk :dsa-q)
+					     :g (getf subject-pk :dsa-g)
+					     :y (getf subject-pk :dsa-public-key))))
 	  (:dh
 	   ;; TODO support for parameter l (prime-length)
-	   (setf dh-params (generate-dh-params :p (gethash :dh-P certificate)
-					       :g (gethash :dh-G certificate)))
-	   (setf dh-Y (gethash :dh-Y certificate))))
+	   (setf dh-params (generate-dh-params :p (getf subject-pk :dh-P)
+					       :g (getf subject-pk :dh-G)))
+	   (setf dh-Y (getf subject-pk :dh-Y))))
 	;; Ensure the subject and subjectAltNames match
 	(when peer-dns-name
 	  (unless dns-names
@@ -1360,7 +1364,10 @@
     ;; Send the certificateVerify
     (and certificate-requested
 	 certificate
-	 (unless (gethash :dh-P (x509-decode (first certificate)))
+	 (unless (eql (first
+		       (getf (subject-pki (tbs-certificate (x509-decode (first certificate))))
+			     :algorithm-identifier))
+		      :dh)
 	   (send-handshake session :certificate-verify)))
     ;; Send the changeCipherText
     (send-change-cipher-spec session)
@@ -1440,23 +1447,23 @@
 
 (defun get-private-key (path)
   (let ((private-key-info (load-priv-key (get-contents path))))
-    (case (gethash :public-key-algorithm private-key-info)
+    (case (getf private-key-info :private-key-algorithm)
       (:rsa
-       (ironclad:make-private-key :rsa :d (gethash :private-exponent private-key-info)
-				       :n (gethash :modulus private-key-info)))
+       (ironclad:make-private-key :rsa :d (getf private-key-info :private-exponent)
+				       :n (getf private-key-info :modulus)))
       (:dsa
        (ironclad:make-private-key :dsa
-				  :p (gethash :dsa-p private-key-info)
-				  :q (gethash :dsa-q private-key-info)
-				  :g (gethash :dsa-g private-key-info)
-				  :x (gethash :dsa-x private-key-info)))
+				  :p (getf private-key-info :dsa-p)
+				  :q (getf private-key-info :dsa-q)
+				  :g (getf private-key-info :dsa-g)
+				  :x (getf private-key-info :dsa-x)))
       (:dh
-       (gethash :dh-X private-key-info)))))
+       (getf private-key-info :dh-X)))))
 
 (defun dhparams-from-key-file (path)
   (let ((pki (load-priv-key (get-contents path))))
-    (generate-dh-params :p (gethash :dh-P pki)
-			:g (gethash :dh-G pki))))
+    (generate-dh-params :p (getf pki :dh-P)
+			:g (getf pki :dh-G))))
 
 (defun symbol-to-suite-list (sym)
   (case sym
@@ -1608,8 +1615,10 @@
 		   :ciphers (create-cipher-vector
 			     include-ciphers exclude-ciphers
 			     (when certificates
-			       (gethash :public-key-algorithm
-					(x509-decode (first certificates)))))
+			       (first
+				(getf (subject-pki
+				       (tbs-certificate (x509-decode (first certificates))))
+				      :algorithm-identifier))))
 		   :dh-params (unless (or (member :dh exclude-ciphers)
 					  (member :dhe exclude-ciphers))
 				(or (and dh-params

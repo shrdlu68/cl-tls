@@ -26,68 +26,65 @@
 	 (subject-public-key (second subject-pki-indices)))
     (subseq cert (1+ (second subject-public-key)) (third subject-public-key))))
 
-(defun check-certificate-status (session subject raw-subject issuer raw-issuer)
+(defun check-certificate-status (session subject issuer)
   "Check certificate status via OCSP.
    If the OCSP request is successful and the status os good, return true.
    Return false in every other case"
-  (let* ((ocsp-status
-	   (and 
-	    (getf (gethash :authority-information-access subject) :ocsp)
-	    ;; Certificate has an ocsp url
-	    (handler-case
-		(check-ocsp subject raw-subject issuer raw-issuer)
-	      (ocsp-error (err)
-		(format
-		 t
-		 "An error occured while checking the status of the certificate. Details: ~A"
-		 (log-info err))
-		:error)))))
-    (or (null ocsp-status)
-	(eql ocsp-status :good))))
+  (with-slots ((subject-tbs-certificate tbs-certificate)) subject
+    (with-slots ((subject-extensions extensions)) subject-tbs-certificate
+      (let* ((ocsp-status
+	       (and 
+		(getf (authority-information-access subject-extensions) :ocsp)
+		;; Certificate has an ocsp url
+		(handler-case
+		    (check-ocsp subject issuer)
+		  (ocsp-error (err)
+		    (format
+		     t
+		     "Error encountered while checking the certificate status. Details: ~A"
+		     (log-info err))
+		    :error)))))
+	(or (null ocsp-status)
+	    (eql ocsp-status :good))))))
 
-(defun validate (session decoded-chain raw-chain)
-  "Certificate Path validation. decode-chain is the chain of certificates, decoded.
-   chain is the chain of certificates, der-encoded."
+(defun validate (session chain)
+  "Certificate Path validation, including status checking"
   (loop
-    with last-index = (1- (length decoded-chain))
-    for index upfrom 0 below (length decoded-chain)
+    with last-index = (1- (length chain))
+    for index upfrom 0 below (length chain)
     do
        ;; Check validity
-       (unless (time-valid-p (aref decoded-chain index))
+       (unless (time-valid-p (aref chain index))
 	 (return-from validate nil))
        (cond ((= last-index index)
 	      (with-slots (ca-certificates) session
-		(let* ((subject (aref decoded-chain index))
+		(let* ((subject (aref chain index))
+		       (subject-tbs (tbs-certificate subject))
 		       (issuers (loop
 				  for ca in ca-certificates
-				  when (equal (gethash :subject ca)
-					      (gethash :issuer subject))
+				  when (equal (subject (tbs-certificate ca))
+					      (issuer subject-tbs))
 				    collect ca))
 		       (issuer
 			 (loop
-			   with authority-key-identifier = (gethash
-							    :authority-key-identifier
-							    subject)
+			   with authority-key-identifier = (authority-key-identifier
+							    (extensions subject-tbs))
 			   for ca in issuers
 			   when (equalp
 				 (getf
 				  authority-key-identifier :key-identifier)
-				 (gethash :subject-key-identifier ca))
+				 (subject-key-identifier (extensions (tbs-certificate ca))))
 			     return ca)))
 		  (unless (and issuer
 			       (verify-signature subject issuer))
 		    (return-from validate nil)))))
 	     (t
-	      (let ((subject (aref decoded-chain index))
-		    (raw-subject (aref raw-chain index))
-		    (issuer (aref decoded-chain (1+ index)))
-		    (raw-issuer (aref raw-chain (1+ index))))
-		(unless (check-certificate-status session
-						  subject raw-subject
-						  issuer raw-issuer)
+	      (let ((subject (aref chain index))
+		    (issuer (aref chain (1+ index))))
+		(unless (check-certificate-status session subject issuer)
 		  (return-from validate nil))
-		(unless (equal (gethash :issuer subject)
-			       (gethash :subject issuer))
+		(unless (equal (issuer (tbs-certificate subject))
+			       (subject (tbs-certificate issuer)))
 		  (return-from validate nil))
 	        (unless (verify-signature subject issuer)
 		  (return-from validate nil))))))

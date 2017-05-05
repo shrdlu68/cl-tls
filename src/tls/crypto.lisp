@@ -110,8 +110,10 @@
 		      for sig in supported-sig-algos
 		      when
 			(eql (second sig)
-			     (gethash :public-key-algorithm
-				      (x509-decode (first certificate)))) return sig)
+			     (first
+			      (getf (subject-pki
+				     (tbs-certificate (x509-decode (first certificate))))
+				    :algorithm-identifier))) return sig)
 		   (or (and supported-signature-algorithms
 			    (loop
 			       for sig in supported-signature-algorithms
