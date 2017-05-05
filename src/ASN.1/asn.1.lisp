@@ -33,7 +33,7 @@
 (define-condition asn.1-decoding-error (error)
   ((text :initarg :text :reader text)))
 
-(defparameter *max-int-len* 512)
+(defparameter *max-int-len* 1024)
 
 (defun from-stream-parse-der (octet-stream
 			      &key (mode :deserialized))
@@ -137,10 +137,10 @@
 					   (fast-io:make-octet-vector length-octets-length))))
 		   (fast-io:fast-read-sequence length-octets octet-stream)
 		   (setf element-length (octets-to-integer length-octets))))))
-	;; (when (and (or (eql element-type :integer)
-	;; 	       (eql element-type :enumerated))
-	;; 	   (> element-length *max-int-len*))
-	;;   (error 'asn.1-decoding-error :text "Integer length is more than max allowed"))
+	(when (and (or (eql element-type :integer)
+		       (eql element-type :enumerated))
+		   (> element-length *max-int-len*))
+	  (error 'asn.1-decoding-error :text "Integer length is more than max allowed"))
 	(values element-type
 		;; Skip the first octet of an integer if it is 0
 		(let ((contents (fast-io:make-octet-vector element-length)))
