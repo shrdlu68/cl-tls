@@ -22,7 +22,7 @@
 			 (error 'exception
 				:log "SNI hostname is not ASCII"
 				:alert :decode-error)))
-		     (gethash :host-name extensions-data)))
+		     (host-name extensions-data)))
 		 (otherwise
 		  (error 'exception
 			 :log "Unknown SNI name_type"
@@ -35,7 +35,7 @@
 (defmethod parse-extension (session extension-data (type (eql :max-fragment-length)))
   (cond ((plusp (length extension-data))
 	 (with-slots (extensions-data) session
-	   (setf (gethash :max-fragment-length extensions-data)
+	   (setf (max-fragment-length extensions-data)
 		 (case (aref extension-data 0)
 		   (1 (expt 2 9))
 		   (2 (expt 2 10))
@@ -52,7 +52,7 @@
 
 (defmethod parse-extension (session extension-data (type (eql :client-certificate-url)))
   (with-slots (extensions-data) session
-    (setf (gethash :client-certificate-url extensions-data) t)))
+    (setf (client-certificate-url extensions-data) t)))
 
 (defmethod parse-extension (session extension-data (type (eql :signature-algorithm)))
   (flet ((fail ()
@@ -62,7 +62,7 @@
     (let ((len (- (length extension-data) 2)))
       (unless (evenp len) (fail))
       (with-slots (extensions-data) session
-	(setf (gethash :supported-signature-algorithms extensions-data)
+	(setf (supported-signature-algorithms extensions-data)
 	      (loop
 		 for hash from 2 by 2 below len
 		 for sig from 3 by 2 below len

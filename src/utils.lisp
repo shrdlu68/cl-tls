@@ -96,7 +96,8 @@
 		     (cond
 		       ((<= (+ offset length-octets) ,vec-length)
 			(setf field-length
-			      (octets-to-integer (subseq ,vec offset (+ offset length-octets))))
+			      (octets-to-integer (subseq ,vec offset
+							 (+ offset length-octets))))
 			(unless (>= field-length (first (second li)))
 			  (funcall ,error-lambda))
 			(incf offset length-octets)
@@ -105,7 +106,8 @@
 				  (append ,fields
 					  (list (if (zerop field-length)
 						    nil
-						    (subseq ,vec offset (+ offset field-length))))))
+						    (subseq ,vec offset
+							    (+ offset field-length))))))
 			    (funcall ,error-lambda))
 			(incf offset field-length))
 		       (t
@@ -114,7 +116,8 @@
 		    (t
 		     (if (<= (+ offset (second li)) ,vec-length)
 			 (setf ,fields
-			       (append ,fields (list (subseq ,vec offset (+ offset (second li))))))
+			       (append ,fields (list (subseq ,vec offset
+							     (+ offset (second li))))))
 			 (funcall ,error-lambda))
 		     (incf offset (second li)))))
 	 (destructuring-bind ,syms ,fields ,@b)))))

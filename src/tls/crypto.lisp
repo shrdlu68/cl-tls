@@ -104,7 +104,7 @@
 	       key-exchange-method priv-key supported-sig-algos
 	       certificate) session
     (let* ((supported-signature-algorithms
-	    (gethash :supported-signature-algorithms extensions-data))
+	    (supported-signature-algorithms extensions-data))
 	   (algos (or
 		   (loop
 		      for sig in supported-sig-algos

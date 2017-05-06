@@ -14,22 +14,6 @@
 (defconstant +ASN1_PRIMITIVE+ #X00)
 (defconstant +ASN1_CONSTRUCTED+ #X20)
 
-(defconstant +ID_AT_COUNTRY+ 6)
-(defconstant +ID_AT_ORGANIZATION+ 10)
-(defconstant +ID_AT_ORGANIZATION_UNIT+ 11)
-(defconstant +ID_AT_DN_QUALIFIER+ 46)
-(defconstant +ID_AT_STATE_OR_PROVINCE_NAME+ 8)
-(defconstant +ID_AT_COMMON_NAME+ 3)
-(defconstant +ID_AT_SERIAL_NUMBER+ 5)
-(defconstant +ID_AT_NAME+ 41)
-(defconstant +ID_AT_SURNAME+ 4)
-(defconstant +ID_AT_GIVEN_NAME+ 42)
-(defconstant +ID_AT_INITIALS+ 43)
-(defconstant +ID_AT_GENERATION_QUALIFIER+ 44)
-(defconstant +ID_AT_LOCALITY+  7)
-(defconstant +ID_AT_TITLE+ 12)
-(defconstant +ID_AT_PSEUDONYM+ 65)
-
 (define-condition asn.1-decoding-error (error)
   ((text :initarg :text :reader text)))
 

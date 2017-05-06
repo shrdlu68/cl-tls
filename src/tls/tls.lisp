@@ -37,6 +37,20 @@
 (define-condition tunnel-closed (error)
   ())
 
+(defclass hello-extensions ()
+  ((host-name :initarg :host-name
+	      :initform nil
+	      :accessor host-name)
+   (max-fragment-length :initarg :max-fragment-length
+			:initform nil
+			:accessor max-fragment-length)
+   (client-certificate-url :initarg :client-certificate-url
+			   :initform nil
+			   :accessor client-certificate-url)
+   (supported-signature-algorithms :initarg :supported-signature-algorithms
+				   :initform nil
+				   :accessor supported-signature-algorithms)))
+
 (defclass session ()
   ((role :initarg :role)
    (version :initform (make-octet-vector :initial-contents #(3 3))
@@ -71,7 +85,7 @@
    (dh-params :initform nil)
    (dh-Y :initform nil)
    (dhe-private-key :initform nil)
-   (extensions-data :initform (make-hash-table))
+   (extensions-data :initform (make-instance 'hello-extensions))
    ;; Key size
    (mac-key-length :initform 0)
    (enc-key-length :initform 0)
