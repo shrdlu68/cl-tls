@@ -302,17 +302,20 @@
 		   :alert :decode-error))
 	(let* ((padding-length (aref ciphertext (1- (length ciphertext))))
 	       (content-length
-		 (- (length ciphertext)
-		    (+ record-iv-length mac-key-length padding-length 1)))
+		(- (length ciphertext)
+		   (+ record-iv-length mac-key-length padding-length 1)))
+	       (random-content-length (aref (get-random-octets 1) 0))
 	       verify-mac
 	       content)
-	  ;; Length checks, again
-	  (unless (plusp content-length)
-	    (error 'exception
-		   :log "Invalid padding length in GenericBlockCipher struct"
-		   :alert :decode-error))
+	  ;; As a countermeasure against padding oracle attacks, don't process
+	  ;; the padding. The MAC will fail anyway in case of tampering.
+	  ;; Append 256 bytes to the end of the plaintext to prevent out-of-bounds
+	  ;; errors.
+	  (setf ciphertext (cat-vectors ciphertext (get-random-octets 256)))
 	  (setf content (subseq ciphertext record-iv-length
-				(+ record-iv-length content-length)))
+				(+ record-iv-length (if (< content-length 0)
+							random-content-length
+							content-length))))
 	  (setf verify-mac (calculate-verification-mac session content-type content))
 	  (unless (timing-independent-compare
 		   verify-mac
