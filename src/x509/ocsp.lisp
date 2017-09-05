@@ -87,9 +87,9 @@
 						    :n (getf pk :modulus)
 						    :e (getf pk :public-exponent))))
 	     (setf signature (rsa-encrypt signature pub-key))
-	     (unless (= (aref signature 0) 1)
+	     (unless (= (aref signature 1) 1)
 	       (return-from verify-ocsp-signature nil))
-	     (setf signature (subseq signature (1+ (position 0 signature))))
+	     (setf signature (subseq signature (1+ (position 0 signature :start 1))))
 	     (multiple-value-bind (asn-type digest-info) (ocsp-catch-asn-error
 							  (parse-der signature))
 	       (unless (and (eql asn-type :sequence)
@@ -116,7 +116,7 @@
 	       (unless (every (lambda (arg)
 				(asn-type-matches-p :integer arg)) dss-sig-value))
 	       (destructuring-bind (r s) dss-sig-value
-		 (setf signature (ironclad:make-dsa-signature (second r) (second s)))
+		 (setf signature (ironclad:make-signature :dsa :r (second r) :s (second s)))
 		 (ironclad:verify-signature pub-key verification-digest signature))))))))))
 
 (defun parse-response-data (data serial)

@@ -143,11 +143,13 @@
 	  (case signature-algorithm
 	    (:dsa
 	     (let* ((digest (ironclad:digest-sequence (first algos) data))
-		    (raw-signature (ironclad:sign-message priv-key digest))
+		    (raw-signature (ironclad:destructure-signature
+				    :dsa
+				    (ironclad:sign-message priv-key digest)))
 		    (signature
 		     (create-asn-sequence
-		      (list (ironclad:dsa-signature-r raw-signature) :integer)
-		      (list (ironclad:dsa-signature-s raw-signature) :integer))))
+		      (list (getf raw-signature :r) :integer)
+		      (list (getf raw-signature :s) :integer))))
 	       (fast-io:writeu16-be (length signature) out)
 	       (fast-io:fast-write-sequence signature out)))
 	    (:rsa
@@ -179,7 +181,7 @@
 		 (fail))
 	       (destructuring-bind (r s) contents
 		 (ironclad:verify-signature
-		  pub-key digest (ironclad:make-dsa-signature (second r) (second s)))))))
+		  pub-key digest (ironclad:make-signature :dsa :r (second r) :s (second s)))))))
 	  (:rsa
 	   (rsassa-pkcs1.5-verify pub-key data signature hash-alg))
 	  (:ecdsa

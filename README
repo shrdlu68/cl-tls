@@ -15,7 +15,10 @@ phase and should only be used for experimental
 purposes.
 
 CL-TLS uses Ironclad as its cryptographic 
-back-end. See the system definition file for other dependencies
+back-end (at the time of writing, the ironclad in quicklisp
+has not yet been updated to the new maintained repo,
+use sharplispers/ironclad).
+See the system definition file for other dependencies
 
 The project started as an attempt to create a 
 network-based TLS fuzzer, but soon

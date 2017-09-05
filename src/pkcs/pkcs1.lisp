@@ -11,7 +11,10 @@
 
 (defun rsa-encrypt (data key)
   "Converts data into an encryption block then calls ironclad"
-  (let* ((k (/ (integer-length (ironclad::rsa-key-modulus key)) 8))
+  (let* ((destructured-key (if (typep key 'ironclad::rsa-private-key)
+			       (ironclad:destructure-private-key key)
+			       (ironclad:destructure-public-key key)))
+	 (k (/ (integer-length (getf destructured-key :n)) 8))
 	 (D (length data))
 	 (padding-length (- k 3 D))
 	 (eb (make-array (+ 3 padding-length D) :element-type 'octet)))
@@ -66,12 +69,14 @@
 	 
 
 (defun rsassa-pkcs1.5-sign (priv-key msg hash-algorithm)
-  (let* ((k (ceiling (integer-length (ironclad::rsa-key-modulus priv-key)) 8))
+  (let* ((e (getf (ironclad:destructure-private-key priv-key) :n))
+	 (k (ceiling (integer-length e) 8))
 	 (EM (emsa-pkcs1-v1.5-encode msg k hash-algorithm)))
     (ironclad:decrypt-message priv-key EM)))
 
 (defun rsassa-pkcs1.5-verify (pub-key msg signature hash-algorithm)
-  (let ((k (ceiling (integer-length (ironclad::rsa-key-modulus pub-key)) 8)))
+  (let* ((e (getf (ironclad:destructure-public-key pub-key) :n))
+	 (k (ceiling (integer-length e) 8)))
     (or (= (length signature) k)
 	(return-from rsassa-pkcs1.5-verify nil))
     (let* ((M (ironclad:encrypt-message pub-key signature))
