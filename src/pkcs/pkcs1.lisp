@@ -66,7 +66,6 @@
 	(fast-io:fast-write-sequence PS out)
 	(fast-io:fast-write-byte #x00 out)
 	(fast-io:fast-write-sequence TT out)))))
-	 
 
 (defun rsassa-pkcs1.5-sign (priv-key msg hash-algorithm)
   (let* ((e (getf (ironclad:destructure-private-key priv-key) :n))
@@ -78,7 +77,7 @@
   (let* ((e (getf (ironclad:destructure-public-key pub-key) :n))
 	 (k (ceiling (integer-length e) 8)))
     (or (= (length signature) k)
-	(return-from rsassa-pkcs1.5-verify nil))
+    	(return-from rsassa-pkcs1.5-verify nil))
     (let* ((M (ironclad:encrypt-message pub-key signature))
-	   (EM (subseq (emsa-pkcs1-v1.5-encode msg k hash-algorithm) 1)))
+	   (EM (emsa-pkcs1-v1.5-encode msg k hash-algorithm)))
       (timing-independent-compare M EM))))
