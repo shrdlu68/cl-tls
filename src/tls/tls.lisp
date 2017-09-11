@@ -34,9 +34,6 @@
 (define-condition tls-error (error)
   ((text :initarg :text :accessor text)))
 
-(define-condition tunnel-closed (error)
-  ())
-
 (defclass hello-extensions ()
   ((host-name :initarg :host-name
 	      :initform nil
@@ -1154,7 +1151,7 @@
 	       (content-type (read-byte stream))
 	       (record-version (get-sequence stream 2))
 	       (length (stream-octets-to-integer stream 2))
-	       (fragment (cond ((> length (expt 2 14))
+	       (fragment (cond ((> length *max-fragment-length*)
 				(error 'exception
 				       :log (format nil "Record overflow. Length: ~A" length)
 				       :alert :record-overflow))
@@ -1683,7 +1680,7 @@
        ;; Return the write function, expects an octet vector as the sole argument.
        (lambda (octet-vector)
 	 (if (eql state :closed)
-	     (error 'tunnel-closed)
+	     (error 'stream-error)
 	     (send session +application-data+ octet-vector)))
        ;; Close function
        (lambda ()
@@ -1735,7 +1732,7 @@
        ;; Return the write function, expects an octet vector as the sole argument.
        (lambda (octet-vector)
 	 (if (eql state :closed)
-	     (error 'tunnel-closed)
+	     (error 'stream-error)
 	     (send new-client-session +application-data+ octet-vector)))
        ;; Close function
        (lambda ()

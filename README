@@ -260,7 +260,6 @@ initialize-listener (&key certificate private-key ca-certificates
 					  fail if the client fails to provide a certificate.
 					  This option defaults to nil.
 
-
 accept-tunnel (&key io-stream input-stream output-stream)
 	      => read-callback,write-callback,close-callback
 
@@ -283,12 +282,30 @@ accept-tunnel (&key io-stream input-stream output-stream)
 		write-callback A closure of one argument, an octet vector of arbitrary size,
 			       to be sent down the tunnel
 			       Attempting to write to a closed TLS tunnel will
-			       signal the condition cl-tls:tunnel-closed
+			       signal the condition cl:stream-error
 			       If an error is encountered while attempting to write to
 			       the underlying stream (for example is a socket connection
 			       is terminated without properly closing the TLS tunnel),
 			       the condition cl:stream-error will be signalled.
 		close-callback A closure of no arguments that politely closes the TLS
 			       connection by sending a close_notify alert.
+
+(defclass address ()
+  ((host :initarg :host
+	 :accessor host)
+   (port :initarg :port
+	 :accessor port)))
+
+request-stream-to-address (address)
+		 =>octet stream
+	Specialize this generic function and provide socket functionality.
+	This is needed by some of the functionality in cl-tls that may need
+	to open sockets, such as contacting OCSP responders.
+	For example, to if you are using usockets:
+	(defmethod cl-tls:request-stream-to-address ((addr cl-tls:address))
+	  (usocket:socket-stream (usocket:socket-connect
+	  (cl-tls:host addr) (cl-tls:port addr)
+	  :protocol :stream
+	  :element-type '(unsigned-byte 8))))
 
 This API will likely change as development continues.
