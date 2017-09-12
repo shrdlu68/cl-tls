@@ -20,7 +20,7 @@
 (defconstant +client-key-exchange+ 16)
 (defconstant +finished+ 20)
 
-(defparameter *max-fragment-length* (expt 2 14))
+(defparameter *max-fragment-length* (+ (expt 2 14) 2048))
 
 (defparameter *max-certificate-chain-length* 20)
 
