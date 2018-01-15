@@ -1582,7 +1582,7 @@
   (assert (or io-stream
 	      (and input-stream output-stream)))
   (assert (and (listp include-ciphers)
-	       (listp include-ciphers)))
+	       (listp exclude-ciphers)))
   (ecase role
     (:client
      (or peer-dns-name

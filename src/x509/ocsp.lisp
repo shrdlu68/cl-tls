@@ -177,8 +177,7 @@
 			(t (fail)))))
       (bind-responses
        data
-       (declare (ignorable version responder-id produced-at
-			   response-extensions))
+       (declare (ignorable version responder-id response-extensions))
        (unless (asn-type-matches-p :sequence responses) (fail))
        (let ((single-response (first (second responses))))
 	 (unless (asn-type-matches-p :sequence single-response) (fail))
@@ -195,9 +194,12 @@
 	  (unless (asn-type-matches-p :generalized-time this-update)
 	    (fail))
 	  (setf this-update (asn-time-to-universal-time (second this-update)))
-	  ;; Chech that thisUpdate is sufficiently recent (12 hours)
-	  (unless (<= (- (get-universal-time) this-update) (* 100 60 60))
-	    (error 'ocsp-error :log "OCSP status time is not sufficiently recent"))
+	  ;; Ensure the response was signed sufficiently recently (12 hours)
+	  (setf produced-at (asn-time-to-universal-time (second produced-at)))
+	  (unless (< (- (get-universal-time) produced-at) (* 12 60 60)))
+	  ;; Check that thisUpdate is in the past
+	  (unless (<= this-update (get-universal-time))
+	    (error 'ocsp-error :log "OCSP thisUpdate is in the future"))
 	  ;; Verify that next-update is greater than the current time.
 	  (when next-update
 	    (unless (eql (first next-update) 0) (fail))

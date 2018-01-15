@@ -95,7 +95,7 @@
 	  (trim-space (subseq header (1+ colon-pos))))))
 
 (defun parse-headers-from-stream (stream)
-  "Reapetedly read headers from stream"
+  "Repeatedly read headers from stream"
   (loop for n upfrom 1
 	for header = (read-header stream)
 	while (plusp (length header))

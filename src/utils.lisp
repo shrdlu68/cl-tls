@@ -127,7 +127,7 @@
   (unless (probe-file path)
     (error "File ~A does not exist" path))
   (let* ((ov (alexandria:read-file-into-byte-vector path)))
-    (handler-case (babel:octets-to-string ov :encoding :ascii)
+    (handler-case (babel:octets-to-string ov :encoding :utf-8)
       (babel-encodings:character-decoding-error nil ov))))
 
 (defun asn-type-matches-p (type info)

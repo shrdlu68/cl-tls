@@ -24,7 +24,7 @@
   "Parse a single DER element from the stream. Maximum length
    of integer values is max-int-len
    If mode is :serialized, this function returns the plain contents octets
-   If mode is :serialized, this function attempt to convert the contents octets
+   If mode is :deserialized, this function attempt to convert the contents octets
    into a lisp object if the class type is universal."
   (handler-case
       (let (element-length element-type class constructedp identifier-octet)
