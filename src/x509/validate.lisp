@@ -60,26 +60,33 @@
 	      (with-slots (ca-certificates) session
 		(let* ((subject (aref chain index))
 		       (subject-tbs (tbs-certificate subject))
-		       (issuers (loop
-				  for ca in ca-certificates
-				  when (equal (subject (tbs-certificate ca))
-					      (issuer subject-tbs))
-				    collect ca))
+		       (issuers (loop with issuers = nil
+				      for ca in ca-certificates
+				      do 
+					 (cond ((equal (subject (tbs-certificate ca))
+						       (issuer subject-tbs))
+						(push ca issuers))
+					       ((equal (subject (tbs-certificate ca))
+						       (subject subject-tbs))
+						(return :trusted)))
+				      finally (return issuers)))
 		       (issuer
-			 (loop
-			   with authority-key-identifier = (authority-key-identifier
-							    (extensions subject-tbs))
-			   for ca in issuers
-			   when (equalp
-				 (getf
-				  authority-key-identifier :key-identifier)
-				 (subject-key-identifier (extensions (tbs-certificate ca))))
-			     return ca)))
-		  (unless (and issuer
-			       (verify-signature subject issuer))
-		    (return-from validate nil)))))
-	     (t
-	      (let ((subject (aref chain index))
+			 (and (listp issuers)
+			      (loop
+				with authority-key-identifier = (authority-key-identifier
+								 (extensions subject-tbs))
+				for ca in issuers
+				when (equalp
+				      (getf
+				       authority-key-identifier :key-identifier)
+				      (subject-key-identifier (extensions (tbs-certificate ca))))
+				  return ca))))
+		  (or (eql issuers :trusted)
+		      (unless (and issuer
+				   (verify-signature subject issuer))
+			(return-from validate nil))))))
+		(t
+		 (let ((subject (aref chain index))
 		    (issuer (aref chain (1+ index))))
 		(unless (check-certificate-status session subject issuer)
 		  (return-from validate nil))
