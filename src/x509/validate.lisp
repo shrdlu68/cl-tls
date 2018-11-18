@@ -63,18 +63,19 @@
 		       (issuers (loop with issuers = nil
 				      for ca in ca-certificates
 				      do 
-					 (cond ((equal (subject (tbs-certificate ca))
-						       (issuer subject-tbs))
-						(push ca issuers))
+					 (cond ((and (equal (subject (tbs-certificate ca))
+							    (subject subject-tbs))
+						     (equalp (hash subject)
+							     (hash ca)))
+						(return :trusted))
 					       ((equal (subject (tbs-certificate ca))
-						       (subject subject-tbs))
-						(return :trusted)))
+						       (issuer subject-tbs))
+						(push ca issuers)))
 				      finally (return issuers)))
 		       (issuer
 			 (and (listp issuers)
 			      (loop
-				with authority-key-identifier = (authority-key-identifier
-								 (extensions subject-tbs))
+				with authority-key-identifier = (authority-key-identifier (extensions subject-tbs))
 				for ca in issuers
 				when (equalp
 				      (getf
@@ -85,8 +86,8 @@
 		      (unless (and issuer
 				   (verify-signature subject issuer))
 			(return-from validate nil))))))
-		(t
-		 (let ((subject (aref chain index))
+	     (t
+	      (let ((subject (aref chain index))
 		    (issuer (aref chain (1+ index))))
 		(unless (check-certificate-status session subject issuer)
 		  (return-from validate nil))

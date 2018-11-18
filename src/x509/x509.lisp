@@ -99,6 +99,9 @@
   ((raw :initarg :raw
 	:accessor raw
 	:documentation "The raw octets of the certificate")
+   (hash :initarg :hash
+	 :accessor hash
+	 :documentation "The hash of the raw octets of the certificate")
    (tbs-certificate :initarg :tbs-certificate
 		    :accessor tbs-certificate)
    (signature-algorithm :initarg :signature-algorithm
@@ -528,7 +531,7 @@
 
 (defun x509-decode (octet-vector)
   "Deserialize an x509 certificate from an octet-vector"
-  (let* ((x509 (make-instance 'x509v3-certificate :raw octet-vector))
+  (let* ((x509 (make-instance 'x509v3-certificate :raw octet-vector :hash (ironclad:digest-sequence :sha3/224 octet-vector)))
 	 (certificate
 	   (multiple-value-bind (element-type contents)
 	       (parse-der octet-vector)
