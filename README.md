@@ -1,9 +1,9 @@
 CL-TLS is a prototype Common Lisp implementation 
 of TLS and related protocols and standards including:
-   -RFC5246
-   -ASN.1
-   -x{501,509}
-   -PKCS 1,3,5,8
+* RFC5246
+* ASN.1
+* x{501,509}
+* PKCS{1,3,5,8}
 
 TLS is the IETF-standardized successor of Netscape's SSL
 protocol. Sometimes TLS/SSL are used interchangeably.
@@ -40,32 +40,32 @@ a proper alpha release is announced.
 I also intend to fully document the internals of CL-TLS.
 
 So far:
-   -You can initiate sessions and exchange data through a TLS tunnel
-   either as a server or a client, for RSA, DSA, and Diffie-Hellman 
-   cipher suites. There is no support for ECDSA suites yet.
-   -Certificate path validation works for 
-   certificates signed using RSA or DSA. As above, no support 
-   for ECDSA signature verification yet.
-   -Support for PEM-encoded certificate chains.
-   -Support for most features of the TLS 1.2 spec such as
-    fragmentation and session renegotiation.
+* You can initiate sessions and exchange data through a TLS tunnel
+  either as a server or a client, for RSA, DSA, and Diffie-Hellman 
+  cipher suites. There is no support for ECDSA suites yet.
+* Certificate path validation works for 
+  certificates signed using RSA or DSA. As above, no support 
+  for ECDSA signature verification yet.
+* Support for PEM-encoded certificate chains.
+* Support for most features of the TLS 1.2 spec such as
+  fragmentation and session renegotiation.
 
 Major TODOs before alpha release:
-  -Finalizing work on hello extensions.
-  -Fuzzing.
-  -Speed/Memory optimizations.
+* Finalizing work on hello extensions.
+* Fuzzing.
+* Speed/Memory optimizations.
 
 Features that would be nice, but are not essential
-  -Support for initializing with multiple certificates
-  -ECDSA/ECDH/ECDHE support
-  -Session resumption support
-  -Support for post-RFC5246 cipher suites
-  -rfc{4346,2246,6520}
-  -pkcs#{7,12}
-  -DTLS
-  -Tools for the generation and management of public/private keys and
+* Support for initializing with multiple certificates
+* ECDSA/ECDH/ECDHE support
+* Session resumption support
+* Support for post-RFC5246 cipher suites
+* rfc{4346,2246,6520}
+* pkcs#{7,12}
+* DTLS
+* Tools for the generation and management of public/private keys and
   certificates
-  -DANE
+* DANE
 
 CL-TLS does not offer gray streams, threading, sockets, event-loop, or
 compression functionality. This limits the code of CL-TLS to simply opening
@@ -156,6 +156,7 @@ And here is an example using client functionality:
 
 Preliminary API documentation:
 
+```
 request-tunnel (&key certificate private-key ca-certificates
 	       	     io-stream input-stream output-stream
 		     include-ciphers exclude-ciphers
@@ -243,7 +244,9 @@ request-tunnel (&key certificate private-key ca-certificates
 				   This is checked against the ip-address values
 				   in the subject alternative name extension
 			       	   of the certificate presented by the peer.
+```
 
+```
 initialize-listener (&key certificate private-key ca-certificates
 				include-ciphers exclude-ciphers force-reinitialize
 				authenticate-client-p require-authentication-p
@@ -293,13 +296,17 @@ accept-tunnel (&key io-stream input-stream output-stream)
 			       the condition cl:stream-error will be signalled.
 		close-callback A closure of no arguments that politely closes the TLS
 			       connection by sending a close_notify alert.
+```
 
+```
 (defclass address ()
   ((host :initarg :host
 	 :accessor host)
    (port :initarg :port
 	 :accessor port)))
+```
 
+```
 request-stream-to-address (address)
 		 =>octet stream
 	Specialize this generic function and provide socket functionality.
@@ -311,5 +318,6 @@ request-stream-to-address (address)
 	  (cl-tls:host addr) (cl-tls:port addr)
 	  :protocol :stream
 	  :element-type '(unsigned-byte 8))))
+```
 
 This API will likely change as development continues.
