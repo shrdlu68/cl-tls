@@ -6,7 +6,7 @@
 (define-condition http-error (error)
   ((log :initarg :log
 	:accessor log-info)))
-   
+
 (defclass uri ()
   ((scheme :initarg :scheme
 	   :accessor scheme)
@@ -130,7 +130,7 @@
       (or (= (read-byte stream) 10)
 	  (error 'htt-error :log "Malformed chunk"))
       chunk)))
-	   
+
 (defun read-chunked-response (stream)
   (fast-io:with-fast-output (out)
     (loop for chunk = (read-chunk stream)

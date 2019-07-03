@@ -112,14 +112,14 @@
 					 (eql (first (fourth rc5-cbc-params)) :octet-string))
 			      (error "Invalid RC5-CBC-Pad Parameters"))
 			    (loop for el in rc5-cbc-params collecting
-				 (if (eql (first el) :integer)
-				     (second el)
-				     (second el))))
+							   (if (eql (first el) :integer)
+							       (second el)
+							       (second el))))
 			   ((= (length rc5-cbc-params) 3)
 			    (unless (every (lambda (li) (eql (first li) :integer)) (butlast rc5-cbc-params))
 			      (error "Invalid RC5-CBC-Pad Parameters"))
 			    (loop for el in rc5-cbc-params collecting
-				 (second el)))
+							   (second el)))
 			   (t
 			    (error "Invalid RC5-CBC-Pad Parameters")))))))
       (t (error "Unsupported encryption algorithm")))))
@@ -169,7 +169,7 @@
 	  (error "Malformed PBES2-params"))
 	(destructuring-bind (kdf enc-scheme)
 	    (loop for el in enc-scheme-params collecting
-		 (second el))
+					      (second el))
 	  (multiple-value-bind (enc-algorithm params) (parse-enc-scheme enc-scheme)
 	    (multiple-value-bind (salt iteration-count key-length prf) (parse-kdf kdf)
 	      (unless key-length

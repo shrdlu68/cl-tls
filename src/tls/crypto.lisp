@@ -8,18 +8,18 @@
 (defun p-hash (secret data output-length &optional (digest-algorithm :sha256))
   (let ((output (make-array output-length :element-type 'octet)))
     (loop
-       with digest-size = (ironclad:digest-length digest-algorithm)
-       for hmac = (ironclad:make-hmac secret digest-algorithm)
-       then (reinitialize-instance hmac :key secret)
-       for A = (progn
-		 (ironclad:update-hmac hmac data)
-		 (ironclad:hmac-digest hmac))
-       then (progn
-	      (ironclad:update-hmac hmac A)
-	      (ironclad:hmac-digest hmac))
-       for output-offset = 0 then (+ output-offset digest-size)
-       while (< output-offset output-length)
-       do
+      with digest-size = (ironclad:digest-length digest-algorithm)
+      for hmac = (ironclad:make-hmac secret digest-algorithm)
+	then (reinitialize-instance hmac :key secret)
+      for A = (progn
+		(ironclad:update-hmac hmac data)
+		(ironclad:hmac-digest hmac))
+	then (progn
+	       (ironclad:update-hmac hmac A)
+	       (ironclad:hmac-digest hmac))
+      for output-offset = 0 then (+ output-offset digest-size)
+      while (< output-offset output-length)
+      do
 	 (setf hmac (reinitialize-instance hmac :key secret))
 	 (ironclad:update-hmac hmac (cat-vectors A data))
 	 (replace output (ironclad:hmac-digest hmac) :start1 output-offset))
@@ -50,10 +50,10 @@
 (defun gen-key-material (client)
   "Generate the session keying material"
   (with-slots (master-secret pre-master-secret client-random server-random mac-key-length
-			     enc-key-length role record-iv-length client-write-mac-key
-			     server-write-mac-key client-write-key server-write-key
-			     client-write-iv server-write-iv cipher-type encryption-algorithm
-			     encrypting-cipher-object decrypting-cipher-object)
+	       enc-key-length role record-iv-length client-write-mac-key
+	       server-write-mac-key client-write-key server-write-key
+	       client-write-iv server-write-iv cipher-type encryption-algorithm
+	       encrypting-cipher-object decrypting-cipher-object)
       client
     (setf master-secret
 	  (prf pre-master-secret "master secret"
@@ -74,11 +74,11 @@
       (setf server-write-key (subseq key-block key-offset (+ key-offset enc-key-length)))
       (incf key-offset enc-key-length)
       (when (eql cipher-type :block)
-	  (setf client-write-iv
-		(subseq key-block key-offset (+ key-offset record-iv-length)))
-	  (incf key-offset record-iv-length)
-	  (setf server-write-iv
-		(subseq key-block key-offset (+ key-offset record-iv-length)))))
+	(setf client-write-iv
+	      (subseq key-block key-offset (+ key-offset record-iv-length)))
+	(incf key-offset record-iv-length)
+	(setf server-write-iv
+	      (subseq key-block key-offset (+ key-offset record-iv-length)))))
     ;; (format t "~&Client-write-mac-key: ~S~%" client-write-mac-key)
     ;; (format t "~&Server-write-mac-key: ~S~%" server-write-mac-key)
     ;; (format t "~&Client-write-key: ~S~%" client-write-key)
@@ -104,20 +104,20 @@
 	       key-exchange-method priv-key supported-sig-algos
 	       certificate) session
     (let* ((supported-signature-algorithms
-	    (supported-signature-algorithms extensions-data))
+	     (supported-signature-algorithms extensions-data))
 	   (algos (or
 		   (loop
-		      for sig in supported-sig-algos
-		      when
-			(eql (second sig)
-			     (first
-			      (getf (subject-pki
-				     (tbs-certificate (x509-decode (first certificate))))
-				    :algorithm-identifier))) return sig)
+		     for sig in supported-sig-algos
+		     when
+		     (eql (second sig)
+			  (first
+			   (getf (subject-pki
+				  (tbs-certificate (x509-decode (first certificate))))
+				 :algorithm-identifier))) return sig)
 		   (or (and supported-signature-algorithms
 			    (loop
-			       for sig in supported-signature-algorithms
-			       do
+			      for sig in supported-signature-algorithms
+			      do
 				 (when (eql (second sig) authentication-method)
 				   (return sig))))
 		       (cond ((and (member key-exchange-method
@@ -147,14 +147,14 @@
 				    :dsa
 				    (ironclad:sign-message priv-key digest)))
 		    (signature
-		     (create-asn-sequence
-		      (list (getf raw-signature :r) :integer)
-		      (list (getf raw-signature :s) :integer))))
+		      (create-asn-sequence
+		       (list (getf raw-signature :r) :integer)
+		       (list (getf raw-signature :s) :integer))))
 	       (fast-io:writeu16-be (length signature) out)
 	       (fast-io:fast-write-sequence signature out)))
 	    (:rsa
 	     (let ((signature
-		    (rsassa-pkcs1.5-sign priv-key data hash-algorithm)))
+		     (rsassa-pkcs1.5-sign priv-key data hash-algorithm)))
 	       (fast-io:writeu16-be (length signature) out)
 	       (fast-io:fast-write-sequence signature out)))
 	    (:ecdsa

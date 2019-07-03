@@ -24,15 +24,15 @@
 
 (defun parse-pem (text)
   (loop
-     with offset = 0
-     for header = (decapsulate text "-----BEGIN " "-----" :start offset)
-     for pem-header = (concatenate 'string "-----BEGIN " header "-----")
-     for pem-footer = (concatenate 'string "-----END " header "-----")
-     for (pem next-offset) = (multiple-value-list
-			      (decapsulate text pem-header pem-footer :start offset))
-     while pem
-     do
+    with offset = 0
+    for header = (decapsulate text "-----BEGIN " "-----" :start offset)
+    for pem-header = (concatenate 'string "-----BEGIN " header "-----")
+    for pem-footer = (concatenate 'string "-----END " header "-----")
+    for (pem next-offset) = (multiple-value-list
+			     (decapsulate text pem-header pem-footer :start offset))
+    while pem
+    do
        (setf offset next-offset)
-     collect
-       (cons header 
-	     (cl-base64:base64-string-to-usb8-array pem))))
+    collect
+    (cons header 
+	  (cl-base64:base64-string-to-usb8-array pem))))

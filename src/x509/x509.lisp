@@ -65,7 +65,7 @@
 				 :accessor authority-information-access)
    (subject-information-access :initform nil
 			       :accessor subject-information-access)))
-   
+
 (defclass tbs-certificate ()
   ((version :initarg :version
 	    :initform 0
@@ -82,9 +82,9 @@
    (subject :initarg :subject
 	    :accessor subject)
    (subject-pki :initarg :subject-pki
-			    :initform nil
-			    :accessor subject-pki
-			    :type algorithm-identifier)
+		:initform nil
+		:accessor subject-pki
+		:type algorithm-identifier)
    (issuer-unique-id :initarg :issuer-unique-id
 		     :initform nil
 		     :accessor issuer-unique-id)

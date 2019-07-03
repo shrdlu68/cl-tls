@@ -299,8 +299,8 @@
 		   :alert :decode-error))
 	(let* ((padding-length (aref ciphertext (1- (length ciphertext))))
 	       (content-length
-		(- (length ciphertext)
-		   (+ record-iv-length mac-key-length padding-length 1)))
+		 (- (length ciphertext)
+		    (+ record-iv-length mac-key-length padding-length 1)))
 	       (random-content-length (aref (get-random-octets 1) 0))
 	       verify-mac
 	       content)
@@ -1003,7 +1003,7 @@
 	   :alert :decode-error))
   ;; Convert each certificate to an x509 hash-table
   (let* ((raw-certificates (make-array 0 :element-type 'hash-table
-				     :adjustable t :fill-pointer 0))
+					 :adjustable t :fill-pointer 0))
 	 certificates)
     (handler-case
 	(fast-io:with-fast-input (certs-stream buffer nil 7)
@@ -1071,10 +1071,10 @@
 	  (:dsa
 	   (setf pub-key
 		 (ironclad:make-public-key :dsa
-					     :p (getf subject-pk :dsa-p)
-					     :q (getf subject-pk :dsa-q)
-					     :g (getf subject-pk :dsa-g)
-					     :y (getf subject-pk :dsa-public-key))))
+					   :p (getf subject-pk :dsa-p)
+					   :q (getf subject-pk :dsa-q)
+					   :g (getf subject-pk :dsa-g)
+					   :y (getf subject-pk :dsa-public-key))))
 	  (:dh
 	   ;; TODO support for parameter l (prime-length)
 	   (setf dh-params (generate-dh-params :p (getf subject-pk :dh-P)

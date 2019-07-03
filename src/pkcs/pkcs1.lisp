@@ -5,8 +5,8 @@
   (with-open-file (dev-urandom "/dev/urandom" :direction :input :element-type 'octet)
     (unless end (setf end (length buffer)))
     (loop for n from start below end do
-	 (setf (aref buffer n) (loop for R = (read-byte dev-urandom)
-				    when (plusp R) do (return R))))
+      (setf (aref buffer n) (loop for R = (read-byte dev-urandom)
+				  when (plusp R) do (return R))))
     (- end start)))
 
 (defun rsa-encrypt (data key)
@@ -41,15 +41,15 @@
 (defun emsa-pkcs1-v1.5-encode (M emLen hash-algorithm)
   (let* ((H (ironclad:digest-sequence hash-algorithm M))
 	 (algorithm-identifier
-	  (cat-vectors
-	   (asn-serialize (case hash-algorithm
-			    (:md5 '(1 2 840 113549 2 5))
-			    (:sha1 '(1 3 14 3 2 26))
-			    (:sha256 '(2 16 840 1 101 3 4 2 1))
-			    (:sha384 '(2 16 840 1 101 3 4 2 2))
-			    (:sha512 '(2 16 840 1 101 3 4 2 3)))
-			  :oid)
-	   (asn-serialize nil :null)))
+	   (cat-vectors
+	    (asn-serialize (case hash-algorithm
+			     (:md5 '(1 2 840 113549 2 5))
+			     (:sha1 '(1 3 14 3 2 26))
+			     (:sha256 '(2 16 840 1 101 3 4 2 1))
+			     (:sha384 '(2 16 840 1 101 3 4 2 2))
+			     (:sha512 '(2 16 840 1 101 3 4 2 3)))
+			   :oid)
+	    (asn-serialize nil :null)))
 	 (TT (create-asn-sequence
 	      (list algorithm-identifier :sequence)
 	      (list H :octet-string)))

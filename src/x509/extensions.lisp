@@ -56,10 +56,10 @@
     (6
      ;; uniformResourceIdentifier
      (let ((uri (handler-case
-			 (babel:octets-to-string (second general-name) :encoding :ascii)
-		       (babel:character-decoding-error nil
-			 (error 'x509-decoding-error
-				:text "Invalid URL")))))
+		    (babel:octets-to-string (second general-name) :encoding :ascii)
+		  (babel:character-decoding-error nil
+		    (error 'x509-decoding-error
+			   :text "Invalid URL")))))
        (cons :uri uri)))
     (7
      ;; iPAddress
@@ -76,8 +76,8 @@
 (defun parse-general-names (general-names)
   "Return a bag of generalNames"
   (loop
-     for general-name in general-names
-     collecting (parse-general-name general-name)))
+    for general-name in general-names
+    collecting (parse-general-name general-name)))
 
 (defmethod process-extension (x509 critical-p value (type (eql :subject-alternative-name)))
   (handler-case
@@ -87,9 +87,9 @@
 		 :text "Invalid SubjectAlternativeName GeneralNames"))
 	(setf (subject-alternative-name x509)
 	      (parse-general-names general-names)))
-  (asn.1-decoding-error (e)
-			(error 'x509-decoding-error
-			       :text (format nil "An ASN.1 decoding error was encountered while processing the SubjectAlternativeName extension. Details: ~A~%" (slot-value e 'text))))))
+    (asn.1-decoding-error (e)
+      (error 'x509-decoding-error
+	     :text (format nil "An ASN.1 decoding error was encountered while processing the SubjectAlternativeName extension. Details: ~A~%" (slot-value e 'text))))))
 
 (defmethod process-extension (x509 critical-p value (type (eql :issuer-alternative-name)))
   (handler-case
@@ -116,8 +116,8 @@
 	(unless (<= 0 (length value) 3) (fail))
 	(let (key-id)
 	  (loop
-	     for id in value
-	     do
+	    for id in value
+	    do
 	       (case (first id)
 		 (0;; keyIdentifier
 		  (setf (getf key-id :key-identifier) (second id)))
@@ -137,9 +137,9 @@
 (defmethod process-extension (x509 critical-p value (type (eql :subject-key-identifier)))
   ;; KeyIdentifier ::= OCTET STRING
   (handler-bind ((asn.1-decoding-error
-		  #'(lambda (e)
-		      (error 'x509-decoding-error
-			     :text (format nil "An ASN.1 decoding error was encountered while processing the SubjectKeyIdentifier extension. Details: ~A~%" (slot-value e 'text))))))
+		   #'(lambda (e)
+		       (error 'x509-decoding-error
+			      :text (format nil "An ASN.1 decoding error was encountered while processing the SubjectKeyIdentifier extension. Details: ~A~%" (slot-value e 'text))))))
     (setf value (multiple-value-list (parse-der value)))
     (unless (eql (first value) :octet-string)
       (error 'x509-decoding-error :text "Invalid SubjectKeyIdentifier extension data"))
@@ -147,9 +147,9 @@
 
 (defmethod process-extension (x509 critical-p value (type (eql :key-usage)))
   (handler-bind ((asn.1-decoding-error
-		  #'(lambda (e)
-		      (error 'x509-decoding-error
-			     :text (format nil "An ASN.1 decoding error was encountered while processing the KeyUsage extension. Details: ~A~%" (slot-value e 'text))))))
+		   #'(lambda (e)
+		       (error 'x509-decoding-error
+			      :text (format nil "An ASN.1 decoding error was encountered while processing the KeyUsage extension. Details: ~A~%" (slot-value e 'text))))))
     (setf value (multiple-value-list (parse-der value)))
     (unless (eql (first value) :bit-string)
       (error 'x509-decoding-error :text "Invalid keyUsage extension data"))
@@ -166,7 +166,7 @@
        (getf usage :encipherment-only) (= (ldb (byte 1 7) bit-string) 1)
        (getf usage :decipherment-only) (= (ldb (byte 1 8) bit-string) 1))
       (setf (key-usage x509) usage))))
-  
+
 (defun parse-qualifier (policy-qualifier-id qualifier)
   ;; Qualifier ::= CHOICE {
   ;; cPSuri           CPSuri,
@@ -186,14 +186,14 @@
 		(unless (<= 0 (length qualifier) 2) (fail))
 		(let (unotice)
 		  (loop
-		     for notice in qualifier
-		     do
-		     ;; UserNotice ::= SEQUENCE {
-		     ;; noticeRef        NoticeReference OPTIONAL,
-		     ;; explicitText     DisplayText OPTIONAL }
-		     ;; NoticeReference ::= SEQUENCE {
-		     ;; organization     DisplayText,
-		     ;; noticeNumbers    SEQUENCE OF INTEGER }
+		    for notice in qualifier
+		    do
+		       ;; UserNotice ::= SEQUENCE {
+		       ;; noticeRef        NoticeReference OPTIONAL,
+		       ;; explicitText     DisplayText OPTIONAL }
+		       ;; NoticeReference ::= SEQUENCE {
+		       ;; organization     DisplayText,
+		       ;; noticeNumbers    SEQUENCE OF INTEGER }
 		       (when (asn-type-matches-p :sequence notice);; noticeRef
 			 (let (notice-ref)
 			   (setf notice (second notice))
@@ -211,11 +211,11 @@
 			     (setf notice-numbers (second notice-numbers))
 			     (setf (getf notice-ref :notice-numbers)
 				   (loop
-				      for number in notice-numbers
-				      do
+				     for number in notice-numbers
+				     do
 					(unless (asn-type-matches-p :integer number) (fail))
-				      collect
-					(second number))))
+				     collect
+				     (second number))))
 			   (setf (getf unotice :notice-reference) notice-ref)))
 		       (when (find
 			      (first notice)
@@ -235,8 +235,8 @@
 	(setf value (second value))
 	(let (policies)
 	  (loop
-	     for policy-information in value
-	     do
+	    for policy-information in value
+	    do
 	       (let (policy)
 		 (unless (eql (first policy-information) :sequence) (fail))
 		 (setf policy-information (second policy-information))
@@ -249,8 +249,8 @@
 		     (unless (eql (first policy-qualifiers) :sequence) (fail))
 		     (setf policy-qualifiers (second policy-qualifiers))
 		     (loop
-			for policy-qualifier-info in policy-qualifiers
-			do
+		       for policy-qualifier-info in policy-qualifiers
+		       do
 			  (unless (asn-type-matches-p :sequence policy-qualifier-info)
 			    (fail))
 			  (setf policy-qualifier-info (second policy-qualifier-info))
@@ -277,21 +277,21 @@
 	  (unless (eql asn-type :sequence) (fail))
 	  (setf (policy-mappings x509)
 		(loop
-		   for policy-mapping in policy-mappings
-		   do
+		  for policy-mapping in policy-mappings
+		  do
 		     (unless (and (asn-type-matches-p :sequence policy-mapping)
 				  (= (length (second policy-mapping)) 2))
 		       (fail))
-		   collect
-		     (destructuring-bind (issuer subject) (second policy-mapping)
-		       (unless (and (eql (first issuer) :oid )
-				    (eql (first subject) :oid)) (fail))
-		       (list :issuer-domain-policy (second issuer)
-			     :subject-domain-policy (second subject)))))))
+		  collect
+		  (destructuring-bind (issuer subject) (second policy-mapping)
+		    (unless (and (eql (first issuer) :oid )
+				 (eql (first subject) :oid)) (fail))
+		    (list :issuer-domain-policy (second issuer)
+			  :subject-domain-policy (second subject)))))))
     (asn.1-decoding-error (e)
       (error 'x509-decoding-error
 	     :text (format nil "An ASN.1 decoding error was encountered while processing the PolicyMappings extension. Details: ~A~%" (slot-value e 'text))))))
-		 
+
 
 (defmethod process-extension (x509 critical-p value (type (eql :basic-constraints)))
   (handler-case
@@ -337,21 +337,21 @@
 	  (unless (eql type :sequence) (fail))
 	  (setf (extended-key-usage x509)
 		(loop
-		   for key-purpose-id in contents
-		   do
+		  for key-purpose-id in contents
+		  do
 		     (unless (asn-type-matches-p :oid key-purpose-id) (fail))
-		   collect
-		     (switch ((second key-purpose-id) :test #'equal)
-			     ('(1 3 6 1 5 5 7 3 1) :tls-web-server-authentication)
-			     ('(1 3 6 1 5 5 7 3 2) :tls-web-client-authentication)
-			     ('(1 3 6 1 5 5 7 3 3) :code-signing)
-			     ('(1 3 6 1 5 5 7 3 4) :email-protection)
-			     ('(1 3 6 1 5 5 7 3 5) :ipsec-end-system)
-			     ('(1 3 6 1 5 5 7 3 6) :ipsec-tunnel)
-			     ('(1 3 6 1 5 5 7 3 7) :ipsec-user)
-			     ('(1 3 6 1 5 5 7 3 8) :time-stamping)
-			     ('(1 3 6 1 5 5 7 3 9) :ocsp-signing)
-			     (otherwise (second key-purpose-id)))))))
+		  collect
+		  (switch ((second key-purpose-id) :test #'equal)
+			  ('(1 3 6 1 5 5 7 3 1) :tls-web-server-authentication)
+			  ('(1 3 6 1 5 5 7 3 2) :tls-web-client-authentication)
+			  ('(1 3 6 1 5 5 7 3 3) :code-signing)
+			  ('(1 3 6 1 5 5 7 3 4) :email-protection)
+			  ('(1 3 6 1 5 5 7 3 5) :ipsec-end-system)
+			  ('(1 3 6 1 5 5 7 3 6) :ipsec-tunnel)
+			  ('(1 3 6 1 5 5 7 3 7) :ipsec-user)
+			  ('(1 3 6 1 5 5 7 3 8) :time-stamping)
+			  ('(1 3 6 1 5 5 7 3 9) :ocsp-signing)
+			  (otherwise (second key-purpose-id)))))))
     (asn.1-decoding-error (e)
       (error 'x509-decoding-error
 	     :text (format nil "An ASN.1 decoding error was encountered while processing the ExtendedKeyUsage extension. Details: ~A~%" (slot-value e 'text))))))
@@ -365,27 +365,27 @@
 	  (unless (eql type :sequence) (fail))
 	  (setf (crl-distribution-points x509)
 		(loop
-		   for distribution-point in crl-distribution-points
-		   doing (unless (asn-type-matches-p :sequence distribution-point) (fail))
-		   collecting
-		     (loop
-			for field in (second distribution-point) collecting
-			  (case (first field)
-			    (0;; distributionPoint
-			     (multiple-value-bind (asn-type asn-contents) (parse-der (second field))
-			       (case asn-type
-				 (0;; fullName
-				  (list :full-name
-					(parse-general-names (asn-sequence-to-list asn-contents))))
-				 (1;; nameRelativeToCRLIssuer
-				  ;; 
-				  ))))
-			    (1;; reasons
-			     ;; 
-			     )
-			    (2;; cRLIssuer
-			     ;; 
-			     )))))))
+		  for distribution-point in crl-distribution-points
+		  doing (unless (asn-type-matches-p :sequence distribution-point) (fail))
+		  collecting
+		  (loop
+		    for field in (second distribution-point) collecting
+							     (case (first field)
+							       (0;; distributionPoint
+								(multiple-value-bind (asn-type asn-contents) (parse-der (second field))
+								  (case asn-type
+								    (0;; fullName
+								     (list :full-name
+									   (parse-general-names (asn-sequence-to-list asn-contents))))
+								    (1;; nameRelativeToCRLIssuer
+								     ;; 
+								     ))))
+							       (1;; reasons
+								;; 
+								)
+							       (2;; cRLIssuer
+								;; 
+								)))))))
     (asn.1-decoding-error (e)
       (error 'x509-decoding-error
 	     :text (format nil "An ASN.1 decoding error was encountered while processing the CRLDistributionPoints extension. Details: ~A~%" (slot-value e 'text))))))
@@ -407,8 +407,8 @@
     (setf value (second value))
     (let (info-access)
       (loop
-	 for access-description in value
-	 do
+	for access-description in value
+	do
 	   (unless (eql (first access-description) :sequence) (fail))
 	   (setf access-description (second access-description))
 	   (unless (= (length access-description) 2) (fail))

@@ -9,10 +9,10 @@
     (fast-io:with-fast-input (server-name-list extension-data)
       (handler-case
 	  (loop
-	     for sn-length = (fast-io:readu16-be server-name-list)
-	     for sn = (fast-io:make-octet-vector sn-length)
-	     while (< (fast-io:buffer-position server-name-list) (length extensions-data))
-	     do
+	    for sn-length = (fast-io:readu16-be server-name-list)
+	    for sn = (fast-io:make-octet-vector sn-length)
+	    while (< (fast-io:buffer-position server-name-list) (length extensions-data))
+	    do
 	       (fast-io:fast-read-sequence sn server-name-list)
 	       (case (aref sn 0)
 		 (0 (push
@@ -64,17 +64,17 @@
       (with-slots (extensions-data) session
 	(setf (supported-signature-algorithms extensions-data)
 	      (loop
-		 for hash from 2 by 2 below len
-		 for sig from 3 by 2 below len
-		 collecting
-		   (list
-		    (case (aref extension-data hash)
-		      (1 :md5) (2 :sha1) (3 :sha224)
-		      (4 :sha256) (5 :sha384) (6 :sha512)
-		      (otherwise (fail)))
-		    (case (aref extension-data sig)
-		      (1 :rsa) (2 :dsa) (3 :ecdsa)
-		      (otherwise (fail))))))))))
+		for hash from 2 by 2 below len
+		for sig from 3 by 2 below len
+		collecting
+		(list
+		 (case (aref extension-data hash)
+		   (1 :md5) (2 :sha1) (3 :sha224)
+		   (4 :sha256) (5 :sha384) (6 :sha512)
+		   (otherwise (fail)))
+		 (case (aref extension-data sig)
+		   (1 :rsa) (2 :dsa) (3 :ecdsa)
+		   (otherwise (fail))))))))))
 
 (defmethod parse-extension (session extension-data (type (eql :trusted-ca-keys)))
   ;; TODO
@@ -104,7 +104,7 @@
 
 (defun create-cert-status-request ()
   ;; TODO
-)
+  )
 
 (defun create-sni (fqdn)
   (let* ((fqdn-octets (babel:string-to-octets fqdn :encoding :ascii))
