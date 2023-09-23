@@ -191,7 +191,7 @@
 	(ironclad:make-cipher :aes
 			      :key endpoint-encryption-key
 			      :mode cipher-mode
-			      :initialization-vector (subseq plaintext 0 record-iv-length))
+			      :initialization-vector (get-random-octets record-iv-length))
 	plaintext :start record-iv-length))
       (:3des
        (ironclad:encrypt-in-place
@@ -199,7 +199,7 @@
 	 :3des
 	 :key endpoint-encryption-key
 	 :mode cipher-mode
-	 :initialization-vector (subseq plaintext 0 record-iv-length))
+	 :initialization-vector (get-random-octets record-iv-length))
 	plaintext :start record-iv-length))
       (:rc4
        (ironclad:encrypt-in-place encrypting-cipher-object plaintext)))))
