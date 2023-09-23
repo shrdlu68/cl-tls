@@ -225,13 +225,13 @@ request-tunnel (&key certificate private-key ca-certificates
 				 :rsa-auth (RSA authentication)
 				 :dh (static dh) :dhe (ephemeral dh)
 				 :dsa :anon (no authentication-vulnerable to MITM attacks!)
-				 :rc4 (broken and prohibited) :3des
+				 :rc4 (broken and prohibited) :3des (broken and prohibited)
 				 :aes128 :aes256 :cbc (cipher block chaining mode)
 				 :md5 :sha1 :sha256
 				 
 		:exclude-ciphers A list of symbols of cipher suites to exclude
 				 from the default cipher list.
-				 :anon and :rc4 are already excluded by default
+				 :anon, :rc4 and :3des should be excluded by default
 				 
 		:peer-dns-name DNS-name of the peer. This is checked against
 			       the dns-name values in the subject alternative name extension
